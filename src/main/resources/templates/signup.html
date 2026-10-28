@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>회원가입 | 판결읽기</title><link rel="stylesheet" th:href="@{/css/legal.css}"></head>
+<body><main class="auth-shell"><span class="brand">판결읽기</span><h1>처음 오셨나요?</h1><p class="subtitle">계정을 만들고 시작하세요.</p>
+<form th:action="@{/signup}" th:object="${signupForm}" method="post">
+<label for="username">아이디</label><input id="username" th:field="*{username}" autocomplete="username" minlength="4" maxlength="30" pattern="[a-zA-Z0-9_]{4,30}" required autofocus><small>영문, 숫자, 밑줄 4~30자</small><p class="error" th:errors="*{username}"></p>
+<label for="password">비밀번호</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="64" required><small>8~64자 (UTF-8 기준 최대 72바이트)</small><p class="error" th:errors="*{password}"></p>
+<label for="passwordConfirm">비밀번호 확인</label><input id="passwordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" maxlength="64" required><p class="error" th:errors="*{passwordConfirm}"></p>
+<button type="submit">회원가입</button></form><p class="footer">이미 계정이 있나요? <a th:href="@{/login}">로그인</a></p><p class="footer"><a href="/">← 판결읽기 홈으로</a></p></main></body></html>

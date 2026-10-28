@@ -1,0 +1,17 @@
+/target/
+/data/
+/archive-storage/
+/src/main/resources/application-local.properties
+/.mvn/jvm.config
+.env
+.env.*
+!.env.example
+*.log
+*.mv.db
+*.trace.db
+*.pem
+*.key
+.DS_Store
+Thumbs.db
+/.idea/
+/.vscode/
