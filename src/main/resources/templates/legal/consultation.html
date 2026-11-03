@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{legal/layout::head('상담 준비 자료')}"></head>
+<body><header th:replace="~{legal/layout::header}"></header><main>
+<p class="breadcrumb"><a th:href="@{/notebooks/{id}(id=${prep.id})}" th:text="${prep.title}"></a> / 상담 준비</p>
+<div class="page-heading"><span class="badge">나만 볼 수 있는 자료</span><h1>상담 전에 한 번에 정리하세요</h1><p>사건 요약과 질문을 작성하면 날짜별 기록·준비 자료와 함께 PDF로 내려받을 수 있습니다.</p></div>
+<p class="notice" th:if="${notice}" th:text="${notice}"></p>
+<div class="notebook-grid"><section>
+<form id="consultation" data-draft th:data-draft-owner="${viewer}" th:data-draft-saved="${draftSaved}" class="editor side-panel" th:action="@{/notebooks/{id}/consultation(id=${prep.id})}" th:object="${consultationForm}" method="post">
+<h2>상담할 내용</h2><p>상담 자료는 외부 AI로 전송하지 않습니다. 필요한 사실을 중심으로 적어 주세요.</p>
+<div class="notice" role="alert" th:if="${#fields.hasErrors('*')}"><p th:each="error:${#fields.errors('*')}" th:text="${error}"></p></div>
+<label for="summary">사건 요약</label><textarea id="summary" th:field="*{summary}" maxlength="2000" rows="7" placeholder="언제 어떤 일이 있었는지, 현재 어떤 점에서 의견이 다른지 적어 주세요."></textarea><small>최대 2,000자</small>
+<label for="goal">상담에서 확인하고 싶은 점</label><textarea id="goal" th:field="*{goal}" maxlength="1000" rows="3" placeholder="예: 준비한 자료로 어떤 사실을 확인할 수 있는지 알고 싶어요."></textarea><small>최대 1,000자</small>
+<label for="questions">상담 질문</label><textarea id="questions" th:field="*{questions}" maxlength="3000" rows="7" placeholder="질문을 한 줄씩 적어 주세요.&#10;1. 추가로 준비할 자료가 있나요?&#10;2. 제가 확인해야 할 절차가 있나요?"></textarea><small>최대 3,000자</small>
+<button>내용 저장하고 미리보기 갱신</button><p class="muted">PDF에는 마지막으로 저장한 내용이 들어갑니다. 수정한 뒤 먼저 저장해 주세요.</p></form>
+</section><aside class="side-panel"><h2>준비 현황</h2><p><strong th:text="${prep.events.size()}"></strong>개의 날짜별 기록</p><p><strong th:text="${prep.completed()}"></strong> / <span th:text="${prep.items.size()}"></span>개 자료 확인</p><section th:replace="~{legal/notebook-tools::pdfOptions(@{/notebooks/{id}/consultation/pdf(id=${prep.id})},true)}"></section><p><a th:href="@{/notebooks/{id}(id=${prep.id})}+'#followups'">상담 후 답변·다음 할 일 기록 →</a></p><hr><a th:href="@{/notebooks/{id}(id=${prep.id})}">사건 기록·체크리스트 수정 →</a><p class="muted">PDF에는 기록된 메모도 포함됩니다. 다른 사람에게 전달하기 전 내용을 확인하세요.</p></aside></div>
+<section class="consultation-preview"><div class="section-heading"><h2>저장한 상담 준비 자료</h2></div>
+<article class="side-panel"><h3 th:text="${prep.title}"></h3><p th:text="${prep.category}"></p>
+<h3>1. 사건 요약</h3><p class="pre" th:text="${prep.summary.isBlank()?'아직 작성하지 않았습니다.':prep.summary}"></p>
+<h3>2. 상담에서 확인하고 싶은 점</h3><p class="pre" th:text="${prep.goal.isBlank()?'아직 작성하지 않았습니다.':prep.goal}"></p>
+<h3>3. 상담 질문</h3><p class="pre" th:text="${prep.questions.isBlank()?'아직 작성하지 않았습니다.':prep.questions}"></p>
+<h3>4. 사건 경위</h3><p th:if="${prep.events.empty}">아직 기록이 없습니다.</p><ol class="timeline"><li th:each="event:${prep.events}"><time th:text="${event.date}"></time><span class="badge" th:text="${event.kind}"></span><h4 th:text="${event.title}"></h4><p class="pre" th:text="${event.note}"></p></li></ol>
+<h3>5. 준비 자료</h3><p th:if="${prep.items.empty}">등록된 항목이 없습니다.</p><ul><li th:each="item:${prep.items}"><span th:text="${item.completed?'[확인] ':'[미확인] '}"></span><span th:text="${item.label}"></span></li></ul>
+<h3>6. 참고 자료</h3><p th:if="${prep.source==null}">연결된 공개 참고 자료가 없습니다.</p><div th:if="${prep.source!=null}"><a th:href="@{/cases/{id}(id=${prep.source.id})}" th:text="${prep.source.title}"></a><p th:if="${prep.source.demo}">가상 학습 사례이며 실제 판결이 아닙니다.</p><p th:if="${!prep.source.demo}" th:text="${prep.source.number}"></p><p class="muted">참고 사례와 내 사건의 사실관계는 다를 수 있습니다.</p></div>
+</article></section></main><footer th:replace="~{legal/layout::footer}"></footer></body></html>

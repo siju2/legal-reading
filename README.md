@@ -1,5 +1,7 @@
 # 판결읽기 - 생활법률 판결 아카이브
 
+> 2026-11-03: Spring AI 판례 설명, PDF 가져오기·내보내기, PortOne V2 이용권 결제를 추가했습니다. 설정 및 최신 기능 범위는 [INTEGRATIONS.md](INTEGRATIONS.md)를 확인하세요. 아래 2026-10-28 기록은 당시 상태입니다.
+
 기존 Spring Boot `Project`를 공개 판결을 생활 언어로 이해하는 서비스로 전환했습니다. 프로젝트 이름·기존 회원은 유지하고 새 도메인은 `com.example.project.legal`, 새 테이블은 `legal_*`를 사용합니다.
 
 ## 실행
@@ -68,7 +70,7 @@
 - `legal_revisions`: 관리자 수정 스냅샷.
 - 기존 `archive_*` 테이블과 업로드 파일은 보존하며 새 서비스는 조회하지 않습니다.
 - 기존 소스·문서는 전환 전 복구 ZIP으로 보관했습니다. 예전 로스트미디어 SRS·일정표는 새 서비스 명세로 사용하지 않습니다.
-- 현재는 등록 자료 검색과 공식 원문 링크를 제공합니다. AI 상담·승소 예측·전국 판결 자동 수집·개인 사건 파일 업로드·실제 결제는 구현하지 않았습니다. 공식 API 검색 코드는 아래 추가 기능 항목을 확인하세요.
+- 현재는 등록 자료 검색과 공식 원문 링크를 제공합니다. 개별 AI 법률 상담·승소 예측·전국 판결 자동 수집은 제공하지 않습니다. 공개 판례 AI 설명·PDF 가져오기·결제는 INTEGRATIONS.md를 참고하세요. 공식 API 검색 코드는 아래 추가 기능 항목을 확인하세요.
 - 국가법령정보 공동활용 API를 나중에 연결할 경우 신청·인증·제공 범위·이용 조건에 맞춰 별도 구현해야 합니다: https://open.law.go.kr/LSO/openApi/guideList.do
 
 GitHub: https://github.com/siju2/legal-reading (비공개 저장소). 이전 로스트미디어 이력은 로컬 lost-media-main 브랜치와 lost-media 원격에 보존합니다.
@@ -111,3 +113,17 @@ git clone https://github.com/siju2/legal-reading.git
 기본 브랜치는 `main`입니다. STS에서는 File → Import → Maven → Existing Maven Projects로 가져옵니다. MySQL `project` 데이터베이스와 로컬 접속 설정을 준비한 다음 `ProjectApplication`을 실행하세요. `application-local.properties.example`을 복사해 비밀번호를 설정하고 실제 비밀번호 파일은 커밋하지 마세요.
 
 검증: 인증·권한·검색·노트 소유권·체크리스트·API 모의 응답 등 테스트 25개 통과. MySQL에서 노트·타임라인·체크리스트 저장 및 삭제를 확인했습니다. 실제 법제처 API 조회는 사용자 OC 인증값·승인 후 별도 확인이 필요합니다.
+
+## 최신 추가 기능 및 명세 (2026-11-03)
+
+- 공개 판례 AI 설명, PDF 텍스트 가져오기 및 선택 출력, PortOne V2 이용권 결제
+- 상담 준비 요약·목표·질문, 상담 후 답변·다음 할 일·완료 상태
+- 체크리스트 직접 편집, 브라우저 탭 임시 저장·복원, 본인 노트 통합 검색
+- JSON 백업 및 기존 데이터를 유지하는 사본 복원
+
+설정과 제약: [INTEGRATIONS.md](INTEGRATIONS.md)
+
+- [추가 기능 SRS PDF](docs/SRS_판결읽기_추가기능_v1.0.pdf)
+- [한 페이지 SRS 엑셀](docs/판결읽기_SRS_한페이지.xlsx)
+
+검증 기록: 서버 테스트 56개와 JavaScript 임시 저장 테스트 7개 통과, JAR 빌드 및 한글 PDF 렌더 확인. `mvn test`와 `node --test src/test/js/notebook-drafts.test.cjs`로 실행할 수 있습니다. AI·결제는 기본 비활성 상태이며 실제 API 응답·PG 결제/환불은 사용자 키와 채널 설정 후 별도 검증이 필요합니다.

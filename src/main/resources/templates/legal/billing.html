@@ -1,0 +1,14 @@
+<!DOCTYPE html><html lang="ko" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{legal/layout::head('Plus 이용권')}"></head><body><header th:replace="~{legal/layout::header}"></header><main>
+<div class="page-heading"><span class="badge">판결읽기 Plus</span><h1>AI 설명과 PDF로 더 편리하게</h1><p>공개 판례 AI 설명과 나의 사건 노트 PDF 내보내기</p></div>
+<p class="notice" th:if="${notice}" th:text="${notice}"></p>
+<section class="side-panel"><h2 th:text="${passDays}+'일 이용권'"></h2><p class="plan-price" th:text="${#numbers.formatInteger(price,1,'COMMA')}+'원'"></p><p>1회 결제이며 자동 갱신되지 않습니다. AI 요청은 계정별 일일 한도가 적용됩니다.</p>
+<p th:if="${validUntil!=null}" th:text="'이용권 만료: '+${#temporals.format(validUntil.atZone(T(java.time.ZoneId).of('Asia/Seoul')),'yyyy-MM-dd HH:mm')}+' (한국 시간)'"></p>
+<p class="notice" th:if="${!billingReady}">결제 준비 중입니다. 결제창이 열리지 않으며 요금이 청구되지 않습니다.</p>
+<p th:if="${!premiumRequired}">현재 AI 설명과 PDF 내보내기는 이용권 없이 체험할 수 있습니다.</p>
+<button id="checkout" th:if="${billingReady and premiumRequired and validUntil==null}">이용권 결제하기</button>
+<p id="payment-message" role="status" aria-live="polite"></p>
+<form id="verify-payment" th:action="@{/billing/verify}" method="post" hidden><input type="hidden" name="paymentId" id="verification-id"></form>
+</section>
+<section><h2>나의 결제 내역</h2><p th:if="${orders.empty}">결제 내역이 없습니다.</p><div class="payment-list"><article class="payment-row" th:each="order:${orders}"><p><strong th:text="${#numbers.formatInteger(order.amount,1,'COMMA')}+'원'"></strong> · <span th:text="${order.status}"></span></p><p class="muted" th:text="${order.paymentId}"></p><form th:if="${billingReady}" th:action="@{/billing/verify}" method="post"><input type="hidden" name="paymentId" th:value="${order.paymentId}"><button class="secondary">결제 상태 다시 확인</button></form></article></div></section>
+<script th:if="${billingReady and premiumRequired}" src="https://cdn.portone.io/v2/browser-sdk.js"></script><script th:if="${billingReady and premiumRequired}" src="/js/billing.js" defer></script>
+</main><footer th:replace="~{legal/layout::footer}"></footer></body></html>

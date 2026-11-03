@@ -14,8 +14,10 @@ public class SecurityConfig {
             .orElseThrow(() -> new UsernameNotFoundException("회원 정보를 찾을 수 없습니다."));
     }
     @Bean SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(auth -> auth.requestMatchers("/admin", "/admin/**").hasRole("ADMIN")
-            .requestMatchers("/login", "/signup", "/css/**", "/error").permitAll()
+        http.csrf(csrf -> csrf.ignoringRequestMatchers("/billing/webhook"))
+            .authorizeHttpRequests(auth -> auth.requestMatchers(org.springframework.http.HttpMethod.POST, "/billing/webhook").permitAll()
+            .requestMatchers("/admin", "/admin/**").hasRole("ADMIN")
+            .requestMatchers("/login", "/signup", "/css/**", "/js/**", "/error").permitAll()
             .requestMatchers(org.springframework.http.HttpMethod.GET, "/", "/cases", "/cases/**", "/compare", "/glossary", "/guide", "/api/cases", "/situation", "/law-search", "/law-search/**", "/api/law/**").permitAll()
             .anyRequest().authenticated())
             .formLogin(form -> form.loginPage("/login").defaultSuccessUrl("/", true).failureUrl("/login?error").permitAll())

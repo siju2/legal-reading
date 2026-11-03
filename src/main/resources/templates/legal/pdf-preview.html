@@ -1,0 +1,10 @@
+<!DOCTYPE html><html lang="ko" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{legal/layout::head('PDF 내용 확인')}"></head><body><header th:replace="~{legal/layout::header}"></header><main>
+<p class="breadcrumb"><a th:href="@{/notebooks/{id}(id=${preview.notebookId})}" th:text="${preview.notebookTitle}"></a> / PDF 내용 확인</p><h1>PDF에서 읽은 내용</h1>
+<p>파일은 서버에 보관하지 않으며 AI로 전송하지 않습니다. 내용과 날짜를 확인한 뒤 저장하면 선택한 텍스트만 개인 노트에 남습니다.</p>
+<details><summary th:text="'추출된 전체 내용 ('+${preview.pages}+'페이지)'"></summary><p class="pre pdf-extracted" th:text="${preview.text}"></p></details>
+<form class="editor side-panel" th:action="@{/notebooks/{id}/events(id=${preview.notebookId})}" method="post">
+<h2>타임라인에 저장할 부분</h2><p class="muted">처음 2,000자를 채웠습니다. 필요한 내용으로 편집해 주세요.</p>
+<label for="date">발생일</label><input id="date" type="date" name="date" th:max="${today}" required>
+<input type="hidden" name="kind" value="기타"><label for="title">제목</label><input id="title" name="title" maxlength="120" value="PDF에서 가져온 기록" required>
+<label for="note">확인한 내용</label><textarea id="note" name="note" maxlength="2000" rows="12" th:text="${preview.saveText}" required></textarea><button>확인한 내용 저장</button>
+</form></main><footer th:replace="~{legal/layout::footer}"></footer></body></html>

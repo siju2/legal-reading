@@ -1,0 +1,15 @@
+# Copy to data/integrations.properties. Do not commit real secrets.
+legal.ai.enabled=false
+legal.ai.api-key=
+legal.ai.model=gpt-5-mini
+legal.ai.daily-limit=10
+
+legal.billing.enabled=false
+legal.billing.enforce-premium=false
+legal.billing.store-id=
+legal.billing.channel-key=
+legal.billing.api-secret=
+legal.billing.webhook-secret=
+# Example pricing. Change before enabling paid access.
+legal.billing.price=9900
+legal.billing.pass-days=30
