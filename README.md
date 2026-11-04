@@ -134,5 +134,8 @@ git clone https://github.com/siju2/legal-reading.git
 
 - [DB 준비 및 더미 데이터 생성 안내](docs/더미데이터_설정안내.md)
 - [추가 기능 ERD PDF](docs/판결읽기_추가기능_ERD.pdf)
+- [추가 기능 ERD SVG](docs/판결읽기_추가기능_ERD.svg) — 확대 가능한 벡터 이미지
+
+![추가 기능 ERD](docs/판결읽기_추가기능_ERD.svg)
 
 애플리케이션을 한 번 실행해 테이블을 만든 뒤 PowerShell에서 `./scripts/seed-demo.ps1`을 실행하세요. 새 계정의 무작위 비밀번호는 Git에서 제외된 `data/demo-login.txt`에 저장됩니다. 실제 결제·AI 호출은 하지 않습니다.
