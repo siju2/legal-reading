@@ -15,6 +15,8 @@ class ExpandProjectDemo {
         for(String name:List.of("application.properties","application-local.properties")) {
             Path file=resources.resolve(name);if(Files.exists(file))try(var reader=Files.newBufferedReader(file,StandardCharsets.UTF_8)){config.load(reader);}
         }
+        Path encryptedRuntime=com.example.project.security.DataCipher.keyPath().toAbsolutePath().getParent().resolve("runtime.properties.enc");
+        if(Files.exists(encryptedRuntime))config.load(new java.io.StringReader(new String(com.example.project.security.DataCipher.decryptFile(Files.readAllBytes(encryptedRuntime)),StandardCharsets.UTF_8)));
         String url=Objects.toString(System.getenv("SPRING_DATASOURCE_URL"),resolve(config.getProperty("spring.datasource.url")));
         if(!url.matches("^jdbc:mysql://(localhost|127\\.0\\.0\\.1):[0-9]+/.*"))throw new IllegalArgumentException("Demo seeding is restricted to local MySQL.");
         String user=Objects.toString(System.getenv("SPRING_DATASOURCE_USERNAME"),resolve(config.getProperty("spring.datasource.username","project_app")));
@@ -45,7 +47,7 @@ class ExpandProjectDemo {
                 int added=0;
                 for(int i=0;i<100;i++){
                     int cat=i%5,topic=(i/5)%5;String title=String.format("[더미 확장 %03d] %s",i+1,topics[cat][topic]);
-                    try(var s=c.prepareStatement("SELECT COUNT(*) FROM legal_notebooks WHERE username=? AND title=?")){s.setString(1,owner);s.setString(2,title);try(var r=s.executeQuery()){r.next();if(r.getLong(1)>0)continue;}}
+                    boolean exists=false;try(var s=c.prepareStatement("SELECT title FROM legal_notebooks WHERE username=?")){s.setString(1,owner);try(var r=s.executeQuery()){while(r.next())if(com.example.project.security.DataCipher.decryptText(r.getString(1)).equals(title)){exists=true;break;}}}if(exists)continue;
                     Long source=null;try(var s=c.prepareStatement("SELECT id FROM legal_cases WHERE category=? AND published=true ORDER BY id LIMIT 1")){s.setString(1,categories[cat]);try(var r=s.executeQuery()){if(r.next())source=r.getLong(1);}}
                     var start=today.minusDays(35+i*2);
                     long id=add(c,"INSERT INTO legal_notebooks(username,title,category,source_case_id,consultation_summary,consultation_questions,consultation_goal,created_at) VALUES(?,?,?,?,?,?,?,?)",owner,title,categories[cat],source,
@@ -66,6 +68,15 @@ class ExpandProjectDemo {
         }catch(SQLException e){System.out.println("Database operation failed: SQLState="+e.getSQLState()+", code="+e.getErrorCode());System.exit(2);}
     }
     static long add(Connection c,String sql,Object... values)throws SQLException {
+        java.util.Map<String,java.util.Set<String>> encryptedColumns=java.util.Map.of(
+            "legal_notebooks",java.util.Set.of("title","consultation_summary","consultation_questions","consultation_goal"),
+            "legal_timeline",java.util.Set.of("title","note"),
+            "legal_checklist",java.util.Set.of("label"),
+            "legal_consultation_logs",java.util.Set.of("answer","next_actions"),
+            "legal_bookmarks",java.util.Set.of("note"));
+        var match=java.util.regex.Pattern.compile("INSERT INTO ([a-z_]+)\\(([^)]+)\\)").matcher(sql);
+        if(match.find()) {var fields=match.group(2).split(",");var selected=encryptedColumns.getOrDefault(match.group(1),java.util.Set.of());for(int i=0;i<values.length;i++)if(selected.contains(fields[i].strip())&&values[i] instanceof String text)values[i]=com.example.project.security.DataCipher.encryptText(text);}
+
         try(var s=c.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){for(int i=0;i<values.length;i++)s.setObject(i+1,values[i]);s.executeUpdate();try(var r=s.getGeneratedKeys()){return r.next()?r.getLong(1):0;}}
     }
 }

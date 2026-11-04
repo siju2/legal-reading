@@ -1,0 +1,12 @@
+-dontshrink
+-dontoptimize
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,MethodParameters,Exceptions,Record,PermittedSubclasses
+-keep class ** { public *; protected *; }
+-keep interface ** { *; }
+-keep @jakarta.persistence.Entity class * { *; }
+-keep @jakarta.persistence.Converter class * { *; }
+-keep class * extends java.lang.Record { *; }
+-keepclassmembers class * { @org.springframework.beans.factory.annotation.Autowired *; @org.springframework.beans.factory.annotation.Value *; }
+-renamesourcefileattribute Source
+-printmapping target/proguard-mapping.txt
+-keep @org.springframework.context.annotation.Configuration class * { *; }

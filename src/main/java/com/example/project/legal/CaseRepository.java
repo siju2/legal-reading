@@ -5,5 +5,5 @@ import java.util.List;
 public interface CaseRepository extends JpaRepository<CaseEntry,Long> {
  List<CaseEntry> findByPublishedTrueOrderByDecisionDateDescIdDesc();
  List<CaseEntry> findAllByOrderByUpdatedAtDesc();
- boolean existsByCaseNumber(String caseNumber);
+ default boolean existsByCaseNumber(String number){return findAll().stream().anyMatch(c->java.util.Objects.equals(c.caseNumber,number));}
 }

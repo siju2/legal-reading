@@ -13,8 +13,7 @@ import java.time.LocalDate;
  public NotebookController(NotebookService s,NotebookRepository b,TimelineRepository e,ChecklistRepository c,LegalService l,ConsultationLogRepository logs){service=s;books=b;events=e;checks=c;legal=l;this.logs=logs;}
  @ModelAttribute void nav(Model m,Authentication a){m.addAttribute("viewer",a==null?null:a.getName());m.addAttribute("isAdmin",a!=null&&a.getAuthorities().stream().anyMatch(x->x.getAuthority().equals("ROLE_ADMIN")));m.addAttribute("categories",LegalService.CATEGORIES);}
  @GetMapping("/notebooks") String list(Principal p,@RequestParam(defaultValue="") String q,@RequestParam(defaultValue="0") int page,Model m){
-  LegalService.require(q.length()<=100,"검색어는 100자 이하로 입력해 주세요.");String term="%"+q.strip().toLowerCase(java.util.Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%";
-  var result=books.searchOwned(p.getName(),term,org.springframework.data.domain.PageRequest.of(Math.max(0,Math.min(page,100000)),20,org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC,"createdAt","id")));
+  LegalService.require(q.length()<=100,"검색어는 100자 이하로 입력해 주세요.");var result=new NotebookSearchService(books,events,checks,logs).search(p.getName(),q,Math.max(0,Math.min(page,100000)));
   m.addAttribute("notebooks",result.getContent());m.addAttribute("q",q);m.addAttribute("page",result);return "legal/notebooks";
  }
  @GetMapping("/notebooks/new") String create(@RequestParam(required=false)Long caseId,Model m){m.addAttribute("sourceCase",caseId==null?null:legal.entry(caseId,false));return "legal/notebook-new";}

@@ -18,5 +18,15 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-test</artifactId><scope>test</scope></dependency>
   </dependencies>
-  <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+  <build><resources><resource><directory>src/main/resources</directory><excludes><exclude>application-local.properties</exclude></excludes></resource></resources><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+
+  <profiles><profile><id>protected-release</id><build><plugins>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><configuration><debug>false</debug><parameters>true</parameters></configuration></plugin>
+    <plugin><groupId>com.github.wvengen</groupId><artifactId>proguard-maven-plugin</artifactId><version>2.7.0</version>
+      <executions><execution><phase>package</phase><goals><goal>proguard</goal></goals></execution></executions>
+      <configuration><proguardVersion>7.8.2</proguardVersion><injar>${project.build.finalName}.jar</injar><outjar>${project.build.finalName}.jar</outjar><proguardInclude>${project.basedir}/proguard-rules.pro</proguardInclude><libs><lib>${java.home}/jmods/java.base.jmod</lib><lib>${java.home}/jmods/java.sql.jmod</lib><lib>${java.home}/jmods/java.desktop.jmod</lib><lib>${java.home}/jmods/java.management.jmod</lib><lib>${java.home}/jmods/java.naming.jmod</lib><lib>${java.home}/jmods/java.net.http.jmod</lib></libs></configuration>
+      <dependencies><dependency><groupId>com.guardsquare</groupId><artifactId>proguard-base</artifactId><version>7.8.2</version><scope>runtime</scope></dependency></dependencies>
+    </plugin>
+    <plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><executions><execution><id>repackage</id><phase>verify</phase><goals><goal>repackage</goal></goals></execution></executions></plugin>
+  </plugins></build></profile></profiles>
 </project>

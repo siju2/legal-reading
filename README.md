@@ -139,3 +139,7 @@ git clone https://github.com/siju2/legal-reading.git
 ![추가 기능 ERD](docs/판결읽기_추가기능_ERD.svg)
 
 애플리케이션을 한 번 실행해 테이블을 만든 뒤 PowerShell에서 `./scripts/seed-demo.ps1`을 실행하세요. 새 계정의 무작위 비밀번호는 Git에서 제외된 `data/demo-login.txt`에 저장됩니다. 실제 결제·AI 호출은 하지 않습니다.
+
+## 암호화 및 보호 배포 (2026-11-04)
+
+DB 본문 AES-256-GCM, 암호화 PDF/백업 다운로드, 외부 암호화 런타임 설정, HTTPS 및 ProGuard 보호 배포를 적용했습니다. 새 실행 주소는 `https://localhost:8443`입니다. 키 준비·복구·제약은 [SECURITY-ENCRYPTION.md](SECURITY-ENCRYPTION.md)를 우선 확인하세요. 이전 임시 저장/평문 JSON 설명보다 이 안내가 우선합니다.

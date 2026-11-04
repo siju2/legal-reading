@@ -15,3 +15,12 @@
 Thumbs.db
 /.idea/
 /.vscode/
+# Encryption keys, local certificates and encrypted recovery artifacts
+**/data-key.bin
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.enc
+/secrets/
+/security/

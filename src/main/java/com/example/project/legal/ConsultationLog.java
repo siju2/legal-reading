@@ -8,7 +8,7 @@ public class ConsultationLog {
     @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;
     @Column(nullable=false) public Long notebookId;
     @Column(nullable=false) public LocalDate consultedOn;
-    @Column(nullable=false,length=4000) public String answer;
-    @Column(length=2000) public String nextActions="";
+    @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT",nullable=false) public String answer;
+    @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT") public String nextActions="";
     public boolean completed;
 }

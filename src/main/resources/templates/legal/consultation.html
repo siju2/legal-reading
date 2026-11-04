@@ -22,4 +22,4 @@
 <h3>4. 사건 경위</h3><p th:if="${prep.events.empty}">아직 기록이 없습니다.</p><ol class="timeline"><li th:each="event:${prep.events}"><time th:text="${event.date}"></time><span class="badge" th:text="${event.kind}"></span><h4 th:text="${event.title}"></h4><p class="pre" th:text="${event.note}"></p></li></ol>
 <h3>5. 준비 자료</h3><p th:if="${prep.items.empty}">등록된 항목이 없습니다.</p><ul><li th:each="item:${prep.items}"><span th:text="${item.completed?'[확인] ':'[미확인] '}"></span><span th:text="${item.label}"></span></li></ul>
 <h3>6. 참고 자료</h3><p th:if="${prep.source==null}">연결된 공개 참고 자료가 없습니다.</p><div th:if="${prep.source!=null}"><a th:href="@{/cases/{id}(id=${prep.source.id})}" th:text="${prep.source.title}"></a><p th:if="${prep.source.demo}">가상 학습 사례이며 실제 판결이 아닙니다.</p><p th:if="${!prep.source.demo}" th:text="${prep.source.number}"></p><p class="muted">참고 사례와 내 사건의 사실관계는 다를 수 있습니다.</p></div>
-</article></section></main><footer th:replace="~{legal/layout::footer}"></footer></body></html>
+</article></section><p class="notice">다운로드 파일은 암호화(.enc)됩니다. 로컬 복호화 도구와 보관한 키가 필요합니다. 브라우저 임시 저장은 비활성화했습니다.</p></main><footer th:replace="~{legal/layout::footer}"></footer></body></html>

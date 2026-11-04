@@ -53,8 +53,8 @@ class ConsultationPreparationTest {
         var source=cases.findByPublishedTrueOrderByDecisionDateDescIdDesc().stream().filter(c->!c.demo).findFirst().orElseThrow();
         var book=books.create("alice","상담용 사건 정리",source.category,source.id);var form=new ConsultationForm();form.setSummary("계약 후 정산 내용을 확인하려고 합니다.");form.setGoal("자료와 사실관계를 확인하고 싶습니다.");form.setQuestions("1. 추가 자료가 필요한가요?\n2. 어떤 사실을 더 정리할까요?");consultation.save("alice",book.id,form);
         books.addEvent("alice",book.id,LocalDate.of(2026,1,1),"계약","계약 내용 확인","계약서의 내용과 실제 입금 내역을 정리했습니다.");
-        var response=mvc.perform(get("/notebooks/"+book.id+"/consultation/pdf").with(user("alice"))).andExpect(status().isOk()).andExpect(content().contentType("application/pdf")).andExpect(header().string("Cache-Control","no-store")).andReturn();
-        byte[] data=response.getResponse().getContentAsByteArray();
+        var response=mvc.perform(get("/notebooks/"+book.id+"/consultation/pdf").with(user("alice"))).andExpect(status().isOk()).andExpect(content().contentType("application/octet-stream")).andExpect(header().string("Cache-Control","no-store")).andReturn();
+        byte[] data=com.example.project.security.DataCipher.decryptFile(response.getResponse().getContentAsByteArray());
         try(var doc=Loader.loadPDF(data)) {
             assertThat(new PDFTextStripper().getText(doc)).contains("상담 준비 자료","계약 후 정산","추가 자료가 필요한가요","계약 내용 확인","준비 자료",source.caseNumber,"공식 출처");
             Files.createDirectories(Path.of("target/consultation-review"));Files.write(Path.of("target/consultation-review/sample.pdf"),data);

@@ -15,6 +15,8 @@ class SeedProjectDemo {
         for(String name:List.of("application.properties","application-local.properties")) {
             Path file=resources.resolve(name);if(Files.exists(file))try(var reader=Files.newBufferedReader(file,StandardCharsets.UTF_8)){config.load(reader);}
         }
+        Path encryptedRuntime=com.example.project.security.DataCipher.keyPath().toAbsolutePath().getParent().resolve("runtime.properties.enc");
+        if(Files.exists(encryptedRuntime))config.load(new java.io.StringReader(new String(com.example.project.security.DataCipher.decryptFile(Files.readAllBytes(encryptedRuntime)),StandardCharsets.UTF_8)));
         String url=Objects.toString(System.getenv("SPRING_DATASOURCE_URL"),resolve(config.getProperty("spring.datasource.url")));
         if(!url.matches("^jdbc:mysql://(localhost|127\\.0\\.0\\.1):[0-9]+/.*"))throw new IllegalArgumentException("Demo seeding is restricted to local MySQL.");
         String user=Objects.toString(System.getenv("SPRING_DATASOURCE_USERNAME"),resolve(config.getProperty("spring.datasource.username","project_app")));
@@ -51,14 +53,23 @@ class SeedProjectDemo {
                 if(!new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().matches(pass,hash))throw new IllegalStateException("Password verification failed");
                 for(String table:List.of("legal_notebooks","legal_ai_usage","legal_payment_orders","legal_bookmarks")){try(var s=c.prepareStatement("SELECT COUNT(*) FROM "+table+" WHERE username=?")){s.setString(1,owner);try(var r=s.executeQuery()){r.next();System.out.println(table+" demo rows="+r.getLong(1));}}}
                 for(String table:List.of("legal_timeline","legal_checklist","legal_consultation_logs")){try(var s=c.prepareStatement("SELECT COUNT(*) FROM "+table+" x JOIN legal_notebooks n ON x.notebook_id=n.id WHERE n.username=?")){s.setString(1,owner);try(var r=s.executeQuery()){r.next();System.out.println(table+" demo rows="+r.getLong(1));}}}
-                Path credentials=Path.of(args[1]); Files.createDirectories(credentials.toAbsolutePath().getParent()); if(Files.exists(credentials))throw new IllegalStateException("Credentials file already exists; refusing to overwrite.");
+                Path credentials=Path.of(args[1]+".enc"); Files.createDirectories(credentials.toAbsolutePath().getParent()); if(Files.exists(credentials))throw new IllegalStateException("Credentials file already exists; refusing to overwrite.");
                 c.commit();
-                Files.writeString(Path.of(args[1]),"테스트 계정: "+owner+"\n비밀번호: "+pass+"\n관리자 권한 없음. 결제 샘플은 READY/CANCELLED 상태이며 실제 결제 및 유료 권한 없음.\n모든 노트와 상담기록은 가상 자료입니다.\n",StandardCharsets.UTF_8);
+                Files.write(credentials,com.example.project.security.DataCipher.encryptFile(("테스트 계정: "+owner+"\n비밀번호: "+pass+"\n관리자 권한 없음. 결제 샘플은 READY/CANCELLED 상태이며 실제 결제 및 유료 권한 없음.\n모든 노트와 상담기록은 가상 자료입니다.\n").getBytes(StandardCharsets.UTF_8)),StandardOpenOption.CREATE_NEW);
                 System.out.println("COMMITTED; credentials saved locally (not printed).");
             }catch(Exception e){c.rollback();throw e;}
         }catch(SQLException e){System.out.println("Database operation failed: SQLState="+e.getSQLState()+", code="+e.getErrorCode());System.exit(2);}
     }
     static long add(Connection c,String sql,Object... values)throws SQLException {
+        java.util.Map<String,java.util.Set<String>> encryptedColumns=java.util.Map.of(
+            "legal_notebooks",java.util.Set.of("title","consultation_summary","consultation_questions","consultation_goal"),
+            "legal_timeline",java.util.Set.of("title","note"),
+            "legal_checklist",java.util.Set.of("label"),
+            "legal_consultation_logs",java.util.Set.of("answer","next_actions"),
+            "legal_bookmarks",java.util.Set.of("note"));
+        var match=java.util.regex.Pattern.compile("INSERT INTO ([a-z_]+)\\(([^)]+)\\)").matcher(sql);
+        if(match.find()) {var fields=match.group(2).split(",");var selected=encryptedColumns.getOrDefault(match.group(1),java.util.Set.of());for(int i=0;i<values.length;i++)if(selected.contains(fields[i].strip())&&values[i] instanceof String text)values[i]=com.example.project.security.DataCipher.encryptText(text);}
+
         try(var s=c.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){for(int i=0;i<values.length;i++)s.setObject(i+1,values[i]);s.executeUpdate();try(var r=s.getGeneratedKeys()){return r.next()?r.getLong(1):0;}}
     }
 }

@@ -63,7 +63,7 @@ class NotebookToolsTest {
     @Test void selectedPdfExcludesUnselectedSectionsAndPrivateNotes()throws Exception{
         var b=create("alice");service.addEvent("alice",b.id,LocalDate.of(2026,1,1),"계약","공개할 사건 제목","private-timeline-note");service.saveConsultationLog("alice",b.id,null,LocalDate.of(2026,1,2),"private-answer","확인할 다음 행동",false);
         var form=new ConsultationForm();form.setSummary("private-summary");form.setQuestions("상담 질문입니다");consultation.save("alice",b.id,form);
-        byte[] bytes=mvc.perform(get("/notebooks/"+b.id+"/consultation/pdf").with(user("alice")).param("sections","_selection","timeline","followups").param("notes","false")).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        byte[] bytes=com.example.project.security.DataCipher.decryptFile(mvc.perform(get("/notebooks/"+b.id+"/consultation/pdf").with(user("alice")).param("sections","_selection","timeline","followups").param("notes","false")).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
         try(var doc=Loader.loadPDF(bytes)){
             assertThat(new PDFTextStripper().getText(doc)).contains("공개할 사건 제목","확인할 다음 행동","상세 메모 제외").doesNotContain("private-timeline-note","private-answer","private-summary","상담 질문입니다","준비 자료 -");
             Files.createDirectories(Path.of("target/tools-review"));Files.write(Path.of("target/tools-review/selected.pdf"),bytes);ImageIO.write(new PDFRenderer(doc).renderImageWithDPI(0,110),"png",Path.of("target/tools-review/selected.png").toFile());
@@ -89,9 +89,9 @@ class NotebookToolsTest {
     @Test void restoreEndpointsRequireExplicitCopyConsentCsrfAndLogin()throws Exception{
         var a=create("alice");byte[] data=backups.export("alice",a.id);String path="/notebooks/restore";
         mvc.perform(get("/notebooks/"+a.id+"/backup").with(user("bob"))).andExpect(status().isNotFound());
-        mvc.perform(multipart(path).file(new MockMultipartFile("file","backup.json","application/json",data)).with(user("bob")).param("confirm","true")).andExpect(status().isForbidden());
-        mvc.perform(multipart(path).file(new MockMultipartFile("file","backup.json","application/json",data)).with(user("bob")).with(csrf())).andExpect(status().isBadRequest());
-        mvc.perform(multipart(path).file(new MockMultipartFile("file","backup.json","application/json",data)).with(user("bob")).with(csrf()).param("confirm","true")).andExpect(redirectedUrl("/notebooks"));
+        mvc.perform(multipart(path).file(new MockMultipartFile("file","backup.json","application/octet-stream",com.example.project.security.DataCipher.encryptFile(data))).with(user("bob")).param("confirm","true")).andExpect(status().isForbidden());
+        mvc.perform(multipart(path).file(new MockMultipartFile("file","backup.json","application/octet-stream",com.example.project.security.DataCipher.encryptFile(data))).with(user("bob")).with(csrf())).andExpect(status().isBadRequest());
+        mvc.perform(multipart(path).file(new MockMultipartFile("file","backup.json","application/octet-stream",com.example.project.security.DataCipher.encryptFile(data))).with(user("bob")).with(csrf()).param("confirm","true")).andExpect(redirectedUrl("/notebooks"));
         mvc.perform(get("/notebooks/backup")).andExpect(status().is3xxRedirection());
     }
     @Test void corruptedOversizedAndUnsupportedBackupLeaveDataUntouched()throws Exception{

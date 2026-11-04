@@ -62,8 +62,8 @@ class IntegrationFeaturesTest {
     @Test void pdfExportsKoreanAndWrapsLongRecordsAcrossPages()throws Exception {
         var book=notebooks.create("alice","보증금 사건 기록","주거",null);
         for(int i=0;i<8;i++)notebooks.addEvent("alice",book.id,LocalDate.of(2026,1,1),"기타","기록 "+i,"계약서와 입금 내용을 확인했습니다. ".repeat(40));
-        var result=mvc.perform(get("/notebooks/"+book.id+"/pdf").with(user("alice"))).andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF)).andExpect(header().string("Cache-Control","no-store")).andReturn();
-        byte[] bytes=result.getResponse().getContentAsByteArray();
+        var result=mvc.perform(get("/notebooks/"+book.id+"/pdf").with(user("alice"))).andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_OCTET_STREAM)).andExpect(header().string("Cache-Control","no-store")).andReturn();
+        byte[] bytes=com.example.project.security.DataCipher.decryptFile(result.getResponse().getContentAsByteArray());
         try(var doc=Loader.loadPDF(bytes)) {
             assertThat(doc.getNumberOfPages()).isGreaterThan(1);
             assertThat(new PDFTextStripper().getText(doc)).contains("보증금 사건 기록","입금 내용을 확인했습니다","준비 자료 체크리스트");
