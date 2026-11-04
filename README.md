@@ -127,3 +127,12 @@ git clone https://github.com/siju2/legal-reading.git
 - [한 페이지 SRS 엑셀](docs/판결읽기_SRS_한페이지.xlsx)
 
 검증 기록: 서버 테스트 56개와 JavaScript 임시 저장 테스트 7개 통과, JAR 빌드 및 한글 PDF 렌더 확인. `mvn test`와 `node --test src/test/js/notebook-drafts.test.cjs`로 실행할 수 있습니다. AI·결제는 기본 비활성 상태이며 실제 API 응답·PG 결제/환불은 사용자 키와 채널 설정 후 별도 검증이 필요합니다.
+
+## 로컬 더미 데이터 및 ERD (2026-11-04)
+
+로컬 MySQL에 테스트 계정과 분야별 노트 105개, 타임라인 1,015개, 체크리스트 820개, 상담기록 305개를 생성할 수 있습니다. 기존 데이터는 유지하며 재실행 시 같은 확장 노트는 중복 생성하지 않습니다.
+
+- [DB 준비 및 더미 데이터 생성 안내](docs/더미데이터_설정안내.md)
+- [추가 기능 ERD PDF](docs/판결읽기_추가기능_ERD.pdf)
+
+애플리케이션을 한 번 실행해 테이블을 만든 뒤 PowerShell에서 `./scripts/seed-demo.ps1`을 실행하세요. 새 계정의 무작위 비밀번호는 Git에서 제외된 `data/demo-login.txt`에 저장됩니다. 실제 결제·AI 호출은 하지 않습니다.
