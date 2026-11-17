@@ -1,7 +1,7 @@
 <!DOCTYPE html><html lang="ko" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{legal/layout::head('나의 사건 노트')}"></head><body><header th:replace="~{legal/layout::header}"></header><main class="narrow">
 <div class="page-heading"><div class="eyebrow">본인만 보는 사실 정리</div><h1>나의 사건 노트</h1><p>사건 기록·상담 질문·다음 할 일을 한곳에서 관리하세요.</p><a class="button" href="/notebooks/new">새 노트 만들기</a></div>
 <p class="notice" th:if="${notice}" th:text="${notice}"></p>
-<form action="/notebooks" method="get" class="search"><label class="sr-only" for="q">내 노트 통합 검색</label><input id="q" name="q" th:value="${q}" maxlength="100" placeholder="제목·메모·질문·상담 답변 검색"><button>검색</button></form><p class="muted">내 노트에서만 검색합니다. <span th:text="${page.totalElements}"></span>개 결과 <a th:if="${!q.isBlank()}" href="/notebooks">검색 초기화</a></p>
+<p><a class="button secondary" href="/legal-ai">사건 노트로 AI에게 질문하기</a></p><p class="muted">내 노트에서만 검색합니다. <span th:text="${page.totalElements}"></span>개 결과 <a th:if="${!q.isBlank()}" href="/notebooks">검색 초기화</a></p>
 <details class="side-panel"><summary>백업·복원</summary><p>노트와 개인 메모·상담 기록이 포함된 JSON 파일입니다. 안전한 곳에 보관하세요. 임시본은 백업에 포함되지 않습니다.</p><a class="button secondary" href="/notebooks/backup">내 전체 노트 백업 받기</a>
 <form class="editor" th:action="@{/notebooks/restore}" method="post" enctype="multipart/form-data"><label for="backup">백업 파일 (5MB 이하)</label><input id="backup" type="file" name="file" accept=".enc,application/octet-stream" required><label class="check"><input type="checkbox" name="confirm" value="true" required>기존 노트를 유지하고 새 사본으로 복원합니다.</label><button>백업에서 복원</button></form></details>
 <div class="empty" th:if="${notebooks.empty}"><h2 th:text="${q.isBlank()?'아직 작성한 노트가 없어요.':'일치하는 노트가 없습니다.'}"></h2><p>새 노트를 만들거나 검색어를 바꿔 보세요.</p></div>

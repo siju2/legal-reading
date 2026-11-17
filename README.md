@@ -143,3 +143,14 @@ git clone https://github.com/siju2/legal-reading.git
 ## 암호화 및 보호 배포 (2026-11-04)
 
 DB 본문 AES-256-GCM, 암호화 PDF/백업 다운로드, 외부 암호화 런타임 설정, HTTPS 및 ProGuard 보호 배포를 적용했습니다. 새 실행 주소는 `https://localhost:8443`입니다. 키 준비·복구·제약은 [SECURITY-ENCRYPTION.md](SECURITY-ENCRYPTION.md)를 우선 확인하세요. 이전 임시 저장/평문 JSON 설명보다 이 안내가 우선합니다.
+
+## 로그인 편의 기능 (2026-11-04)
+
+로그인 화면에서 아이디 저장과 14일 자동 로그인을 각각 선택할 수 있습니다. 아이디 저장은 이 브라우저의 localStorage에 아이디만 보관하며 선택 해제 시 삭제합니다. 비밀번호는 저장하지 않습니다. 자동 로그인은 HTTPS의 Secure·HttpOnly 쿠키와 `legal_login_tokens` 테이블을 사용합니다. 토큰 값은 AES 암호화로 저장하고 재인증 때 교체하며 로그아웃 시 해당 사용자의 자동 로그인 토큰을 폐기합니다. 만료된 토큰은 인증하지 않습니다. 공용 기기에서는 두 옵션을 사용하지 마세요.
+
+검증: 서버 66개 및 JavaScript 8개 테스트 통과. Spring Security의 [영속 자동 로그인](https://docs.spring.io/spring-security/reference/6.5/servlet/authentication/rememberme.html)을 사용합니다.
+
+## 최신 설계 그림
+
+- [메뉴 구성도 SVG](docs/판결읽기_메뉴구성도.svg)
+- [최신 11개 테이블 ERD SVG](docs/판결읽기_추가기능_ERD.svg) — 암호화 열과 자동 로그인 테이블 포함

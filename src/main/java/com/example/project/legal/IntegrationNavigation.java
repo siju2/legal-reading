@@ -8,6 +8,7 @@ import org.springframework.security.core.Authentication;
 public class IntegrationNavigation {
     private final IntegrationSettings settings;
     public IntegrationNavigation(IntegrationSettings settings) { this.settings=settings; }
+    @ModelAttribute("categories") java.util.List<String> categories() { return LegalService.CATEGORIES; }
     @ModelAttribute("aiReady") boolean aiReady() { return settings.aiReady(); }
     @ModelAttribute("viewer") String viewer(Authentication auth) { return auth==null?null:auth.getName(); }
     @ModelAttribute("isAdmin") boolean admin(Authentication auth) { return auth!=null&&auth.getAuthorities().stream().anyMatch(a->a.getAuthority().equals("ROLE_ADMIN")); }

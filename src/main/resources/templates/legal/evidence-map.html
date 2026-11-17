@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="ko" xmlns:th="http://www.thymeleaf.org"><body>
+<section th:fragment="map" id="evidence-map" class="evidence-map">
+  <div class="page-heading"><span class="badge">나의 사건 정리</span><h2>증거 지도</h2><p>내가 알고 있는 내용과 뒷받침하는 기록, 아직 확인할 점을 연결해 보세요.</p></div>
+  <p class="muted">사실·주장의 구분은 사용자가 작성합니다. 연결된 기록의 진실성이나 법적 효력을 판정하지 않습니다.</p>
+  <div class="evidence-example" th:if="${evidenceCards.empty}"><strong>이렇게 연결해 보세요</strong><p>내 주장: 보증금을 돌려받지 못했다 → 관련 기록: 입금 내역 → 미확인점: 계약 종료 통지 날짜 → 다음 할 일: 당시 문자 찾기</p></div>
+  <article class="evidence-card" th:each="card:${evidenceCards}" th:attr="data-evidence-id=${card.id}">
+    <span class="badge" th:text="${card.kind}"></span><h3 th:text="${card.title}"></h3>
+    <div class="evidence-chain">
+      <div><h4>연결한 기록</h4><p th:if="${card.eventId==null}" class="muted">아직 기록을 연결하지 않았습니다.</p>
+        <a th:if="${card.eventId!=null and evidenceEvents.containsKey(card.eventId)}" th:href="'#event-'+${card.eventId}" th:text="${evidenceEvents.get(card.eventId)}"></a>
+        <p th:if="${card.eventId!=null and !evidenceEvents.containsKey(card.eventId)}" class="muted">연결한 기록이 삭제되었습니다. 수정에서 다시 연결해 주세요.</p></div>
+      <div><h4>아직 확인할 점</h4><p class="pre" th:text="${card.gap.isEmpty()?'미확인점을 적어 보세요.':card.gap}"></p></div>
+      <div><h4>다음 할 일</h4><p class="pre" th:text="${card.nextAction.isEmpty()?'확인을 위한 행동을 적어 보세요.':card.nextAction}"></p></div>
+    </div>
+    <details><summary>내용 수정</summary><form class="editor" th:action="@{/notebooks/{id}/evidence/{cardId}(id=${book.id},cardId=${card.id})}" method="post"><div th:replace="~{legal/evidence-map::fields(${card},${card.id})}"></div><button>수정 저장</button></form></details>
+    <form th:action="@{/notebooks/{id}/evidence/{cardId}/delete(id=${book.id},cardId=${card.id})}" method="post"><button class="text-button danger">이 지도 항목 삭제</button></form>
+  </article>
+  <details class="entry-form" th:open="${evidenceCards.empty}"><summary>증거 지도 항목 추가</summary>
+    <form class="editor" th:action="@{/notebooks/{id}/evidence(id=${book.id})}" method="post"><div th:replace="~{legal/evidence-map::fields(${null},'new')}"></div><button>지도에 추가</button></form>
+  </details>
+  <p class="muted">노트당 100개까지 작성할 수 있습니다. 내용은 이 노트의 암호화 백업에 함께 보관됩니다.</p>
+</section>
+<div th:fragment="fields(card,token)">
+  <label th:for="'evidence-kind-'+${token}">내용 구분</label><select name="kind" th:id="'evidence-kind-'+${token}" required><option th:each="kind:${evidenceKinds}" th:value="${kind}" th:text="${kind}" th:selected="${card!=null and card.kind==kind}"></option></select>
+  <label th:for="'evidence-title-'+${token}">정리할 내용</label><input name="title" th:id="'evidence-title-'+${token}" th:value="${card==null?'':card.title}" maxlength="300" placeholder="예: 계약이 끝났지만 보증금을 아직 받지 못했다" required>
+  <label th:for="'evidence-event-'+${token}">관련 타임라인 기록 (선택)</label><select name="eventId" th:id="'evidence-event-'+${token}"><option value="">연결하지 않음</option><option th:each="event:${events}" th:value="${event.id}" th:text="${event.occurredOn+' · '+event.title}" th:selected="${card!=null and card.eventId==event.id}"></option></select>
+  <label th:for="'evidence-gap-'+${token}">아직 확인할 점 (선택)</label><textarea name="gap" th:id="'evidence-gap-'+${token}" th:text="${card==null?'':card.gap}" maxlength="1000" rows="2" placeholder="예: 계약 종료를 알린 날짜와 전달 방법"></textarea>
+  <label th:for="'evidence-action-'+${token}">다음 할 일 (선택)</label><textarea name="nextAction" th:id="'evidence-action-'+${token}" th:text="${card==null?'':card.nextAction}" maxlength="1000" rows="2" placeholder="예: 당시 보낸 문자와 상대방 답변 찾아보기"></textarea>
+</div>
+</body></html>

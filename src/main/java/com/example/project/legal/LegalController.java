@@ -18,12 +18,19 @@ import java.time.LocalDate;
 public class LegalController {
  private final LegalService service;private final CaseRepository cases;private final BookmarkRepository bookmarks;private final RevisionRepository revisions;
  public LegalController(LegalService s,CaseRepository c,BookmarkRepository b,RevisionRepository r){service=s;cases=c;bookmarks=b;revisions=r;}
- @ModelAttribute void nav(Model m,Authentication auth){m.addAttribute("viewer",auth==null?null:auth.getName());m.addAttribute("isAdmin",admin(auth));m.addAttribute("categories",LegalService.CATEGORIES);}
  private boolean admin(Authentication a){return a!=null&&a.getAuthorities().stream().anyMatch(x->x.getAuthority().equals("ROLE_ADMIN"));}
  @GetMapping("/") String home(Model m){var all=service.search("","","all");m.addAttribute("recent",all.stream().filter(c->!c.demo).limit(3).toList());m.addAttribute("examples",all.stream().filter(c->c.demo).limit(3).toList());m.addAttribute("realCount",all.stream().filter(c->!c.demo).count());m.addAttribute("demoCount",all.stream().filter(c->c.demo).count());return "legal/home";}
  @GetMapping("/cases") String list(@RequestParam(defaultValue="")String q,@RequestParam(defaultValue="")String category,@RequestParam(defaultValue="all")String type,@RequestParam(defaultValue="0")int page,Model m){var all=service.search(q,category,type);int p=Math.max(0,Math.min(page,Math.max(0,(all.size()-1)/12)));m.addAttribute("results",new PageImpl<>(all.subList(Math.min(p*12,all.size()),Math.min(p*12+12,all.size())),PageRequest.of(p,12),all.size()));m.addAttribute("q",q);m.addAttribute("category",category);m.addAttribute("type",type);return "legal/list";}
  @GetMapping("/cases/{id}") String detail(@PathVariable long id,Authentication a,Model m){var c=service.entry(id,admin(a));m.addAttribute("entry",c);m.addAttribute("saved",a==null?null:bookmarks.findByUsernameAndCaseId(a.getName(),id).orElse(null));m.addAttribute("related",service.search("",c.category,"all").stream().filter(x->!x.id.equals(id)).limit(3).toList());return "legal/detail";}
- @GetMapping("/compare") String compare(@RequestParam(required=false)Long left,@RequestParam(required=false)Long right,Model m){m.addAttribute("choices",service.search("","","all"));m.addAttribute("leftId",left);m.addAttribute("rightId",right);m.addAttribute("leftCase",left==null?null:service.entry(left,false));m.addAttribute("rightCase",right==null?null:service.entry(right,false));return "legal/compare";}
+ @GetMapping("/compare") String compare(@RequestParam(required=false)Long left,@RequestParam(required=false)Long right,RedirectAttributes redirect){
+  var question=new StringBuilder("두 실제 판례의 사실관계와 판단 차이를 비교해 주세요.");
+  for(Long id:Arrays.asList(left,right))if(id!=null){
+   var entry=service.entry(id,false);
+   if(!entry.demo)question.append(" ").append(entry.title).append(" ").append(entry.caseNumber);
+  }
+  if(left!=null||right!=null)redirect.addAttribute("q",question.toString());
+  return "redirect:/legal-ai";
+ }
  @PostMapping("/cases/{id}/bookmark") String save(@PathVariable long id,Principal p,RedirectAttributes f){service.bookmark(p.getName(),id);f.addFlashAttribute("notice","내 보관함에 저장했습니다.");return "redirect:/cases/"+id;}
  @PostMapping("/cases/{id}/unbookmark") String remove(@PathVariable long id,Principal p,RedirectAttributes f){service.unbookmark(p.getName(),id);f.addFlashAttribute("notice","보관함에서 삭제했습니다.");return "redirect:/my";}
  @PostMapping("/cases/{id}/note") String note(@PathVariable long id,@RequestParam String note,Principal p,RedirectAttributes f){service.note(p.getName(),id,note);f.addFlashAttribute("notice","나만 볼 수 있는 메모를 저장했습니다.");return "redirect:/my";}

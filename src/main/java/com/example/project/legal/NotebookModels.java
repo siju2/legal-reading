@@ -3,12 +3,13 @@ import jakarta.persistence.*;
 import java.time.*;
 public final class NotebookModels {
  private NotebookModels(){}
- @Entity(name="Notebook") @Table(name="legal_notebooks") public static class Notebook {
+ @org.hibernate.annotations.DynamicUpdate @Entity(name="Notebook") @Table(name="legal_notebooks") public static class Notebook {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;
   @Column(nullable=false,length=30) public String username;
   @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT",nullable=false) public String title;
   @Column(nullable=false,length=30) public String category;
   public Long sourceCaseId;
+  @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT") public String evidenceMap;
   @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT") public String consultationSummary;
   @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT") public String consultationQuestions;
   @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT") public String consultationGoal;

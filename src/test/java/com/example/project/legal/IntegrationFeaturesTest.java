@@ -24,14 +24,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:integrations-test;DB_CLOSE_DELAY=-1","spring.datasource.username=sa","spring.datasource.password=","spring.jpa.hibernate.ddl-auto=create-drop",
-    "legal.ai.enabled=true","legal.ai.api-key=fake-test-key","legal.ai.daily-limit=2","legal.billing.enabled=true","legal.billing.enforce-premium=false",
-    "legal.billing.store-id=store-test","legal.billing.channel-key=channel-test","legal.billing.api-secret=fake-secret","legal.billing.webhook-secret=dGVzdC1zZWNyZXQ="})
+    "legal.ai.enabled=true","legal.ai.api-key=fake-test-key","legal.ai.daily-limit=2",
+    })
 @AutoConfigureMockMvc
 class IntegrationFeaturesTest {
     @Autowired MockMvc mvc;@Autowired NotebookService notebooks;@Autowired NotebookPdfService pdf;@Autowired CaseRepository cases;
-    @Autowired AiUsageRepository usage;@Autowired PaymentOrderRepository orders;@Autowired BillingService billing;
-    @MockitoBean AiGateway ai;@MockitoBean PaymentGateway payments;
-    @BeforeEach void resetData() {usage.deleteAll();orders.deleteAll();reset(ai,payments);}
+    @Autowired AiUsageRepository usage;
+    @MockitoBean AiGateway ai;
+    @BeforeEach void resetData() {usage.deleteAll();reset(ai);}
     long realCase() {return cases.findByPublishedTrueOrderByDecisionDateDescIdDesc().stream().filter(c->!c.demo).findFirst().orElseThrow().id;}
     @Test void aiRequiresLoginCsrfConsentAndUsesOnlyPublicCase()throws Exception {
         long id=realCase();
@@ -88,32 +88,5 @@ class IntegrationFeaturesTest {
         var book=notebooks.create("alice","PDF 노트","주거",null);
         for(byte[] bytes:List.of("not a PDF".getBytes(),"%PDF-corrupted".getBytes(),new byte[(int)NotebookPdfService.MAX_UPLOAD+1]))
             mvc.perform(multipart("/notebooks/"+book.id+"/pdf-preview").file(new MockMultipartFile("file","x.pdf","application/pdf",bytes)).with(user("alice")).with(csrf())).andExpect(status().isBadRequest());
-    }
-    @Test void paymentUsesServerPriceAndOwnerBoundIdempotentVerification()throws Exception {
-        mvc.perform(post("/billing/orders").with(user("alice"))).andExpect(status().isForbidden());
-        mvc.perform(post("/billing/orders").with(user("alice")).with(csrf()).param("amount","1")).andExpect(status().isOk()).andExpect(jsonPath("$.totalAmount").value(9900)).andExpect(jsonPath("$.apiSecret").doesNotExist());
-        var order=orders.findTop20ByUsernameOrderByCreatedAtDesc("alice").get(0);
-        mvc.perform(post("/billing/verify").with(user("bob")).with(csrf()).param("paymentId",order.paymentId)).andExpect(status().isNotFound());verifyNoInteractions(payments);
-        Instant paid=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);when(payments.fetch(order.paymentId)).thenReturn(new PaymentGateway.Snapshot(order.paymentId,"store-test","PAID",9900,"KRW",paid));
-        for(int i=0;i<2;i++)mvc.perform(post("/billing/verify").with(user("alice")).with(csrf()).param("paymentId",order.paymentId)).andExpect(redirectedUrl("/billing"));
-        assertThat(orders.findById(order.paymentId).orElseThrow().validUntil).isEqualTo(paid.plus(Duration.ofDays(30)));
-        mvc.perform(get("/billing").with(user("alice"))).andExpect(status().isOk()).andExpect(content().string(containsString("이용권 만료")));
-    }
-    @Test void mismatchedPendingAndCancelledPaymentsDoNotGrantAccess()throws Exception {
-        var checkout=billing.create("alice");String id=checkout.paymentId();
-        when(payments.fetch(id)).thenReturn(new PaymentGateway.Snapshot(id,"store-test","PAID",1,"KRW",Instant.now()));
-        mvc.perform(post("/billing/verify").with(user("alice")).with(csrf()).param("paymentId",id)).andExpect(status().isConflict());assertThat(billing.activeUntil("alice")).isNull();
-        when(payments.fetch(id)).thenReturn(new PaymentGateway.Snapshot(id,"other-store","PAID",9900,"KRW",Instant.now()));
-        mvc.perform(post("/billing/verify").with(user("alice")).with(csrf()).param("paymentId",id)).andExpect(status().isConflict());
-        when(payments.fetch(id)).thenReturn(new PaymentGateway.Snapshot(id,"store-test","PENDING",9900,"KRW",null));billing.verify("alice",id);assertThat(billing.activeUntil("alice")).isNull();
-        when(payments.fetch(id)).thenReturn(new PaymentGateway.Snapshot(id,"store-test","PAID",9900,"KRW",Instant.now()));billing.verify("alice",id);assertThat(billing.activeUntil("alice")).isNotNull();
-        when(payments.fetch(id)).thenReturn(new PaymentGateway.Snapshot(id,"store-test","CANCELLED",9900,"KRW",null));billing.verify("alice",id);assertThat(billing.activeUntil("alice")).isNull();
-    }
-    @Test void signedWebhookRechecksProviderAndIsIdempotent()throws Exception {
-        var checkout=billing.create("alice");String id=checkout.paymentId();when(payments.verifyWebhook(anyString(),any(),any(),any())).thenReturn(id);
-        when(payments.fetch(id)).thenReturn(new PaymentGateway.Snapshot(id,"store-test","PAID",9900,"KRW",Instant.now()));
-        mvc.perform(post("/billing/webhook").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isNoContent());assertThat(billing.activeUntil("alice")).isNotNull();
-        when(payments.fetch(id)).thenReturn(new PaymentGateway.Snapshot(id,"store-test","CANCELLED",9900,"KRW",null));
-        mvc.perform(post("/billing/webhook").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isNoContent());assertThat(billing.activeUntil("alice")).isNull();
     }
 }

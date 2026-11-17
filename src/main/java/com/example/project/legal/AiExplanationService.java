@@ -15,19 +15,19 @@ public class AiExplanationService {
     private final AiGateway gateway;
     private final LegalService legal;
     private final AiUsageRepository usage;
-    private final BillingService billing;
+
     private final Semaphore slots = new Semaphore(2);
-    public AiExplanationService(IntegrationSettings settings, AiGateway gateway, LegalService legal, AiUsageRepository usage, BillingService billing) {
-        this.settings=settings; this.gateway=gateway; this.legal=legal; this.usage=usage; this.billing=billing;
+    public AiExplanationService(IntegrationSettings settings, AiGateway gateway, LegalService legal, AiUsageRepository usage) {
+        this.settings=settings; this.gateway=gateway; this.legal=legal; this.usage=usage;
     }
     public record Explanation(String title, String answer, String sourceUrl, String mode) {}
     public Explanation explain(String user, long id, String mode, boolean consent) {
         var entry=legal.entry(id,false);
         LegalService.require(!entry.demo,"AI 설명은 공개된 실제 판결에서 이용할 수 있습니다.");
         LegalService.require(MODES.containsKey(mode),"설명 유형을 선택해 주세요.");
-        LegalService.require(consent,"공개 판례의 외부 AI 전송에 동의해 주세요.");
+        LegalService.require(consent,settings.localAi()?"로컬 AI의 공개 판례 사용에 동의해 주세요.":"공개 판례의 외부 AI 전송에 동의해 주세요.");
         if(!settings.aiReady()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"AI 연결 설정이 아직 완료되지 않았습니다.");
-        billing.requirePremium(user);
+
         if(!slots.tryAcquire()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"AI 요청이 많습니다. 잠시 후 다시 시도해 주세요.");
         try {
             reserve(user);
@@ -45,7 +45,7 @@ public class AiExplanationService {
           catch(Exception e) { throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"AI 응답을 받지 못했습니다. 연결 설정과 이용 한도를 확인하고 다시 시도해 주세요."); }
         finally { slots.release(); }
     }
-    private synchronized void reserve(String user) {
+    synchronized void reserve(String user) {
         var day=LocalDate.now(ZoneId.of("Asia/Seoul"));
         var row=usage.findByUsernameAndDate(user,day).orElseGet(()->{var u=new AiUsage();u.username=user;u.date=day;return u;});
         if(row.attempts>=settings.dailyLimit()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"오늘의 AI 요청 한도를 사용했습니다.");

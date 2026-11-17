@@ -55,3 +55,8 @@ node --test src/test/js/notebook-drafts.test.cjs
 기존 기능 회귀 테스트, 무작위 암호문·변조 거부·한글/이모지·빈 값·파일 복호화, 실제 SQL 저장값 검사를 포함합니다. 난독화 JAR의 기동·로그인·검색·출력은 별도로 확인해야 합니다.
 
 공식 근거: [Spring Boot SSL](https://docs.spring.io/spring-boot/3.5/how-to/webserver.html), [ProGuard 설정](https://www.guardsquare.com/manual/configuration/usage).
+
+
+## 로그인 편의 기능
+
+사용자가 아이디 저장을 선택하면 아이디만 브라우저 localStorage에 평문으로 저장합니다. 선택 해제하면 삭제합니다. 자동 로그인 토큰은 legal_login_tokens 테이블의 token 열에 AES 암호문으로 저장하고, series·username·lastUsed는 동작에 필요한 메타데이터로 유지합니다. 쿠키는 Secure·HttpOnly이며 HTTPS에서만 사용합니다. 로그아웃하면 해당 사용자의 토큰을 폐기합니다. 기존 키에서 용도를 분리한 HMAC 키를 사용하므로 별도 평문 비밀 설정은 추가하지 않습니다.

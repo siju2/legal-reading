@@ -19,7 +19,8 @@ class LegalFlowTest {
  long id;
  @BeforeEach void setup(){bookmarks.deleteAll();id=cases.findByPublishedTrueOrderByDecisionDateDescIdDesc().stream().filter(c->!c.demo).findFirst().orElseThrow().id;}
  @Test void allPublicPagesAndActualCaseApiRender()throws Exception{
-  for(String url:new String[]{"/","/cases","/cases?type=real","/cases?category=주거","/glossary","/guide","/compare","/login","/signup","/cases/"+id,"/compare?left="+id+"&right="+id})mvc.perform(get(url)).andExpect(status().isOk());
+  for(String url:new String[]{"/","/cases","/cases?type=real","/cases?category=주거","/glossary","/guide","/login","/signup","/cases/"+id})mvc.perform(get(url)).andExpect(status().isOk());
+  mvc.perform(get("/compare").param("left",Long.toString(id)).param("right",Long.toString(id))).andExpect(status().is3xxRedirection()).andExpect(redirectedUrlPattern("/legal-ai?q=*"));
   mvc.perform(get("/")).andExpect(content().string(containsString("판결읽기"))).andExpect(content().string(not(containsString("로스트미디어"))));
   mvc.perform(get("/api/cases")).andExpect(status().isOk()).andExpect(jsonPath("$[0].sourceUrl",startsWith("https://www.law.go.kr/")));
  }

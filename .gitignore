@@ -24,3 +24,10 @@ Thumbs.db
 *.enc
 /secrets/
 /security/
+
+# Python caches and local AI artifacts
+__pycache__/
+*.py[cod]
+*.safetensors
+*.pt
+**/api-token.txt

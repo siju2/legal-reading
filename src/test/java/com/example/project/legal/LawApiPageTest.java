@@ -15,8 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  @Autowired MockMvc mvc;@MockitoBean LawApiService api;
  @Test void officialResultsAndBodyRenderAsEscapedText()throws Exception{
   when(api.configured()).thenReturn(true);
-  when(api.search("prec","임금",1)).thenReturn(new LawApiService.Search(List.of(new LawApiService.Item("600537","임금 <script>bad</script>","2020다247190","20241219","대법원","https://www.law.go.kr/LSW/precInfoP.do?precSeq=600537")),1,1));
-  mvc.perform(get("/law-search").param("q","임금")).andExpect(status().isOk()).andExpect(content().string(containsString("2020다247190"))).andExpect(content().string(containsString("&lt;script&gt;"))).andExpect(content().string(not(containsString("<script>bad"))));
+  mvc.perform(get("/law-search")).andExpect(redirectedUrl("/legal-ai"));
   when(api.detail("600537")).thenReturn(new LawApiService.Detail("임금","2020다247190","20241219","대법원","통상임금 쟁점","요지","관련 조문","기각 <img src=x onerror=bad()>","https://www.law.go.kr/LSW/precInfoP.do?precSeq=600537"));
   mvc.perform(get("/law-search/precedents/600537")).andExpect(status().isOk()).andExpect(content().string(containsString("term-popover"))).andExpect(content().string(containsString("&lt;img"))).andExpect(content().string(not(containsString("<img src=x"))));
  }

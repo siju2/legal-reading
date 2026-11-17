@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.hamcrest.Matchers.*;
 
-@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:notebook-tools-test;DB_CLOSE_DELAY=-1","spring.datasource.username=sa","spring.datasource.password=","spring.jpa.hibernate.ddl-auto=create-drop","legal.ai.enabled=false","legal.billing.enforce-premium=false","legal.billing.enabled=false"})
+@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:notebook-tools-test;DB_CLOSE_DELAY=-1","spring.datasource.username=sa","spring.datasource.password=","spring.jpa.hibernate.ddl-auto=create-drop","legal.ai.enabled=false"})
 @AutoConfigureMockMvc
 class NotebookToolsTest {
     @Autowired MockMvc mvc;@Autowired NotebookService service;@Autowired ConsultationService consultation;@Autowired NotebookBackupService backups;
@@ -113,5 +113,18 @@ class NotebookToolsTest {
         mvc.perform(get("/notebooks").with(user("alice"))).andExpect(model().attribute("notebooks",hasSize(20)));
         mvc.perform(get("/notebooks").with(user("alice")).param("page","1")).andExpect(model().attribute("notebooks",hasSize(4)));
         mvc.perform(get("/notebooks").with(user("alice")).param("q","x".repeat(101))).andExpect(status().isBadRequest());
+    }
+    @Test void backupRoundTripsMoreThanOneThousandTimelineRecords() {
+        var book=create("alice");var records=new ArrayList<NotebookModels.Event>();
+        for(int i=0;i<1001;i++) {
+            var event=new NotebookModels.Event();event.notebookId=book.id;event.occurredOn=LocalDate.of(2026,1,1);
+            event.kind="기타";event.title="기록 "+i;event.note="보존할 메모";records.add(event);
+        }
+        timeline.saveAllAndFlush(records);
+        assertThat(backups.restore("bob",backups.export("alice",book.id))).isEqualTo(1);
+        var restored=books.findByUsernameOrderByCreatedAtDesc("bob").get(0);
+        var restoredEvents=timeline.findByNotebookIdOrderByOccurredOnAscIdAsc(restored.id);
+        assertThat(restoredEvents).hasSize(1001);
+        assertThat(restoredEvents.get(1000).title).isEqualTo("기록 1000");
     }
 }

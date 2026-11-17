@@ -6,8 +6,8 @@ import org.springframework.data.domain.*;
 /** Search only owned records after authenticated decryption, never ciphertext LIKE. */
 public class NotebookSearchService {
     private final NotebookRepository books;private final TimelineRepository events;
-    private final ChecklistRepository checks;private final ConsultationLogRepository logs;
-    public NotebookSearchService(NotebookRepository b,TimelineRepository e,ChecklistRepository c,ConsultationLogRepository l){books=b;events=e;checks=c;logs=l;}
+    private final ChecklistRepository checks;private final ConsultationLogRepository logs;private final EvidenceMapService evidence;
+    public NotebookSearchService(NotebookRepository b,TimelineRepository e,ChecklistRepository c,ConsultationLogRepository l,EvidenceMapService evidence){books=b;events=e;checks=c;logs=l;this.evidence=evidence;}
     public Page<Notebook> search(String user,String query,int page){
         String term=query.strip().toLowerCase(Locale.ROOT);
         var all=books.findByUsernameOrderByCreatedAtDesc(user);
@@ -18,7 +18,7 @@ public class NotebookSearchService {
             for(var e:events.findByNotebookIdIn(ids))if(matches(term,e.title,e.note))matching.add(e.notebookId);
             for(var c:checks.findByNotebookIdIn(ids))if(matches(term,c.label))matching.add(c.notebookId);
             for(var l:logs.findByNotebookIdIn(ids))if(matches(term,l.answer,l.nextActions))matching.add(l.notebookId);
-            found=all.stream().filter(b->matching.contains(b.id)||matches(term,b.title,b.category,b.consultationSummary,b.consultationQuestions,b.consultationGoal)).toList();
+            found=all.stream().filter(b->matching.contains(b.id)||evidence.read(b).stream().anyMatch(c->matches(term,c.title(),c.gap(),c.nextAction()))||matches(term,b.title,b.category,b.consultationSummary,b.consultationQuestions,b.consultationGoal)).toList();
         }
         int from=Math.min(page*20,found.size()),to=Math.min(from+20,found.size());
         return new PageImpl<>(found.subList(from,to),PageRequest.of(page,20),found.size());

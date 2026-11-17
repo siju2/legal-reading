@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="legal.ai.provider",havingValue="openai",matchIfMissing=true)
 public class SpringAiGateway implements AiGateway {
     private final IntegrationSettings settings;
     public SpringAiGateway(IntegrationSettings settings) { this.settings = settings; }

@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.hamcrest.Matchers.*;
 
-@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:consultation-test;DB_CLOSE_DELAY=-1","spring.datasource.username=sa","spring.datasource.password=","spring.jpa.hibernate.ddl-auto=create-drop","legal.ai.enabled=false","legal.billing.enforce-premium=false","legal.billing.enabled=false"})
+@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:consultation-test;DB_CLOSE_DELAY=-1","spring.datasource.username=sa","spring.datasource.password=","spring.jpa.hibernate.ddl-auto=create-drop","legal.ai.enabled=false"})
 @AutoConfigureMockMvc
 class ConsultationPreparationTest {
     @Autowired MockMvc mvc;@Autowired NotebookService books;@Autowired NotebookRepository repository;@Autowired ConsultationService consultation;@Autowired CaseRepository cases;

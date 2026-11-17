@@ -23,6 +23,11 @@ public final class DataCipher {
         catch(java.io.IOException e){throw new IllegalStateException("Encryption key unavailable. Configure LEGAL_CRYPTO_KEY_FILE; never generate a replacement for an existing database.",e);}
     }
     public static void verifyKey(){key();}
+    public static String rememberMeKey(){
+        try {var mac=javax.crypto.Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(key().getEncoded(),"HmacSHA256"));return Base64.getEncoder().encodeToString(mac.doFinal("legal-reading/remember-me/v1".getBytes(StandardCharsets.US_ASCII)));}
+        catch(java.security.GeneralSecurityException e){throw new IllegalStateException("Remember-me key unavailable",e);}
+    }
+
     public static byte[] encrypt(byte[] plain){return crypt(Cipher.ENCRYPT_MODE,plain);}
     public static byte[] decrypt(byte[] envelope){return crypt(Cipher.DECRYPT_MODE,envelope);}
     private static byte[] crypt(int mode,byte[] input){

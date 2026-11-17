@@ -16,25 +16,32 @@ public class NotebookBackupService {
     public record EventData(LocalDate date,String kind,String title,String note) {}
     public record ItemData(String label,boolean completed) {}
     public record LogData(LocalDate date,String answer,String nextActions,boolean completed) {}
-    public record BookData(String title,String category,Long sourceCaseId,String summary,String questions,String goal,List<EventData> events,List<ItemData> items,List<LogData> followups) {}
+    public record EvidenceData(String kind,String title,Integer eventIndex,String gap,String nextAction) {}
+    public record BookData(String title,String category,Long sourceCaseId,String summary,String questions,String goal,List<EventData> events,List<ItemData> items,List<LogData> followups,List<EvidenceData> evidence) {}
     public record Backup(String format,int version,List<BookData> notebooks) {}
     private final NotebookService service;private final NotebookRepository books;private final TimelineRepository events;
-    private final ChecklistRepository checks;private final ConsultationLogRepository logs;private final CaseRepository cases;private final ObjectMapper mapper;
-    public NotebookBackupService(NotebookService service,NotebookRepository books,TimelineRepository events,ChecklistRepository checks,ConsultationLogRepository logs,CaseRepository cases,ObjectMapper mapper){
-        this.service=service;this.books=books;this.events=events;this.checks=checks;this.logs=logs;this.cases=cases;
+    private final ChecklistRepository checks;private final ConsultationLogRepository logs;private final CaseRepository cases;private final ObjectMapper mapper;private final EvidenceMapService evidence;
+    public NotebookBackupService(NotebookService service,NotebookRepository books,TimelineRepository events,ChecklistRepository checks,ConsultationLogRepository logs,CaseRepository cases,ObjectMapper mapper,EvidenceMapService evidence){
+        this.service=service;this.books=books;this.events=events;this.checks=checks;this.logs=logs;this.cases=cases;this.evidence=evidence;
         this.mapper=mapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     }
     @Transactional(readOnly=true)
     public byte[] export(String user,Long id){
         List<Notebook> notebooks=id==null?books.findByUsernameOrderByCreatedAtDesc(user):List.of(service.owned(user,id));
         LegalService.require(notebooks.size()<=100,"한 번에 100개까지 백업할 수 있습니다. 노트별 백업을 이용해 주세요.");
-        var data=notebooks.stream().map(b->new BookData(b.title,b.category,publicSource(b.sourceCaseId,b.category),text(b.consultationSummary),text(b.consultationQuestions),text(b.consultationGoal),
-            events.findByNotebookIdOrderByOccurredOnAscIdAsc(b.id).stream().map(e->new EventData(e.occurredOn,e.kind,e.title,e.note)).toList(),
-            checks.findByNotebookIdOrderByIdAsc(b.id).stream().map(c->new ItemData(c.label,c.completed)).toList(),
-            logs.findByNotebookIdOrderByConsultedOnAscIdAsc(b.id).stream().map(l->new LogData(l.consultedOn,l.answer,l.nextActions,l.completed)).toList())).toList();
+        var data=notebooks.stream().map(this::bookData).toList();
         Backup backup=new Backup("legal-notebooks",1,data);validate(backup);
         try {byte[] bytes=mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(backup);LegalService.require(bytes.length<=MAX_BYTES,"백업이 5MB를 초과했습니다. 노트별로 백업해 주세요.");return bytes;}
         catch(IOException e){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"백업 파일을 만들지 못했습니다.");}
+    }
+    private BookData bookData(Notebook b) {
+        var timeline=events.findByNotebookIdOrderByOccurredOnAscIdAsc(b.id);
+        var positions=new HashMap<Long,Integer>();for(int i=0;i<timeline.size();i++)positions.put(timeline.get(i).id,i);
+        return new BookData(b.title,b.category,publicSource(b.sourceCaseId,b.category),text(b.consultationSummary),text(b.consultationQuestions),text(b.consultationGoal),
+            timeline.stream().map(e->new EventData(e.occurredOn,e.kind,e.title,e.note)).toList(),
+            checks.findByNotebookIdOrderByIdAsc(b.id).stream().map(c->new ItemData(c.label,c.completed)).toList(),
+            logs.findByNotebookIdOrderByConsultedOnAscIdAsc(b.id).stream().map(l->new LogData(l.consultedOn,l.answer,l.nextActions,l.completed)).toList(),
+            evidence.read(b).stream().map(c->new EvidenceData(c.kind(),c.title(),positions.get(c.eventId()),c.gap(),c.nextAction())).toList());
     }
     @Transactional
     public int restore(String user,byte[] bytes){
@@ -45,7 +52,9 @@ public class NotebookBackupService {
         for(var data:backup.notebooks()){
             var b=new Notebook();b.username=user;b.title=data.title().strip();b.category=data.category();b.sourceCaseId=publicSource(data.sourceCaseId(),data.category());
             b.consultationSummary=text(data.summary());b.consultationQuestions=text(data.questions());b.consultationGoal=text(data.goal());books.saveAndFlush(b);
-            for(var e:data.events()){var row=new Event();row.notebookId=b.id;row.occurredOn=e.date();row.kind=e.kind();row.title=e.title().strip();row.note=text(e.note());events.save(row);}
+            var eventIds=new ArrayList<Long>();
+            for(var e:data.events()){var row=new Event();row.notebookId=b.id;row.occurredOn=e.date();row.kind=e.kind();row.title=e.title().strip();row.note=text(e.note());events.save(row);eventIds.add(row.id);}
+            if(data.evidence()!=null)evidence.write(b,data.evidence().stream().map(c->new EvidenceMapService.Card(UUID.randomUUID().toString(),c.kind(),c.title().strip(),c.eventIndex()==null?null:eventIds.get(c.eventIndex()),c.gap().strip(),c.nextAction().strip())).toList());
             for(var c:data.items()){var row=new CheckItem();row.notebookId=b.id;row.label=c.label().strip();row.completed=c.completed();checks.save(row);}
             for(var l:data.followups()){var row=new ConsultationLog();row.notebookId=b.id;row.consultedOn=l.date();row.answer=l.answer().strip();row.nextActions=text(l.nextActions());row.completed=l.completed();logs.save(row);}
         }
@@ -56,7 +65,15 @@ public class NotebookBackupService {
         for(var b:backup.notebooks()){
             LegalService.require(b!=null,"백업 노트가 올바르지 않습니다.");required(b.title(),120,"노트 제목");LegalService.require(b.category()!=null&&LegalService.CATEGORIES.contains(b.category()),"백업 노트의 분야를 확인해 주세요.");
             length(b.summary(),2000,"사건 요약");length(b.questions(),3000,"상담 질문");length(b.goal(),1000,"상담 목표");
-            LegalService.require(b.events()!=null&&b.events().size()<=1000&&b.items()!=null&&b.items().size()<=200&&b.followups()!=null&&b.followups().size()<=100,"노트별 기록은 1,000개, 자료는 200개, 상담 후 기록은 100개 이하여야 합니다.");
+            LegalService.require(b.events()!=null&&b.items()!=null&&b.items().size()<=200&&b.followups()!=null&&b.followups().size()<=100,"날짜별 기록을 확인해 주세요. 노트별 자료는 200개, 상담 후 기록은 100개 이하여야 합니다.");
+            if(b.evidence()!=null) {
+                LegalService.require(b.evidence().size()<=100,"증거 지도는 노트당 100개까지 복원할 수 있습니다.");
+                for(var c:b.evidence()) {
+                    LegalService.require(c!=null,"증거 지도 항목을 확인해 주세요.");
+                    EvidenceMapService.validate(c.kind(),c.title(),c.gap(),c.nextAction());
+                    LegalService.require(c.eventIndex()==null||(c.eventIndex()>=0&&c.eventIndex()<b.events().size()),"증거 지도의 연결 기록을 확인해 주세요.");
+                }
+            }
             for(var e:b.events()){LegalService.require(e!=null,"날짜별 기록을 확인해 주세요.");date(e.date());LegalService.require(e.kind()!=null&&NotebookService.KINDS.contains(e.kind()),"기록 유형을 확인해 주세요.");required(e.title(),120,"기록 제목");length(e.note(),2000,"기록 메모");}
             for(var c:b.items()){LegalService.require(c!=null,"준비 자료 항목을 확인해 주세요.");required(c.label(),250,"준비 자료 이름");}
             for(var l:b.followups()){LegalService.require(l!=null,"상담 후 기록을 확인해 주세요.");date(l.date());required(l.answer(),4000,"상담 답변");length(l.nextActions(),2000,"다음 할 일");}

@@ -1,7 +1,19 @@
-<!DOCTYPE html><html lang="ko" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{legal/layout::head('대문')}"></head><body><header th:replace="~{legal/layout::header}"></header><main>
-<section class="hero"><div class="eyebrow">누구나 이해하는 생활법률</div><h1>어려운 판결을,<br>내 생활의 언어로.</h1><p>법률 용어를 몰라도 괜찮아요.<br>비슷한 상황을 찾고, 법원이 중요하게 본 사실을 읽어보세요.</p><form class="search" action="/cases" method="get"><label class="sr-only" for="q">상황 검색</label><input id="q" name="q" maxlength="160" placeholder="예: 월급을 못 받았어요, 빌려준 돈" required><button>상황으로 찾기</button></form><p><a class="button secondary" href="/situation">어떤 단어로 검색할지 모르겠다면 →</a></p><div class="search-hints"><a href="/cases?q=통상임금">#통상임금</a><a href="/cases?q=대여금">#빌려준돈</a><a href="/cases?category=주거">#보증금</a></div></section>
-<section><div class="section-heading"><div><div class="eyebrow">생활에서 시작하기</div><h2>어떤 일이 있으셨나요?</h2></div></div><div class="category-grid"><a th:each="cat,st:${categories}" th:href="@{/cases(category=${cat})}"><span class="category-number" th:text="'0'+${st.count}"></span><strong th:text="${cat}"></strong><small th:text="${st.index==0?'보증금 · 임대차':st.index==1?'월급 · 상여금':st.index==2?'대여금 · 거래':st.index==3?'게시글 · 표현':'사고 · 손해'}"></small></a></div></section>
-<section><div class="section-heading"><div><div class="eyebrow">공식 출처와 함께 읽기</div><h2>먼저 읽어볼 실제 판결</h2></div><a href="/cases?type=real">실제 판결 <span th:text="${realCount}"></span>건 모두 보기 →</a></div><div class="card-grid"><th:block th:each="c:${recent}"><article th:replace="~{legal/layout::card(${c})}"></article></th:block></div></section>
-<section class="reading-path"><div><span class="step">01</span><h3>상황을 찾고</h3><p>일상적인 단어로 자료를 탐색해요.</p></div><div><span class="step">02</span><h3>판단의 이유를 읽고</h3><p>주장과 인정 사실, 법원의 판단을 구별해요.</p></div><div><span class="step">03</span><h3>근거를 확인하세요</h3><p>원문·관련 법령·내 상황의 차이를 살펴요.</p></div></section>
-<section><div class="section-heading"><div><div class="eyebrow">개념을 연습하는 가상 상황</div><h2>생활법률 학습 노트</h2></div><a href="/cases?type=demo">학습 사례 <span th:text="${demoCount}"></span>개 →</a></div><p class="muted">아래 내용은 실제 판결이 아닙니다. 상황과 자료를 정리하는 연습으로 활용하세요.</p><div class="card-grid"><th:block th:each="c:${examples}"><article th:replace="~{legal/layout::card(${c})}"></article></th:block></div></section>
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{legal/layout::head('법률 AI와 대화하기')}"></head>
+<body><header th:replace="~{legal/layout::header}"></header><main class="home-main">
+<section class="conversation-hero">
+  <div class="hero-copy"><div class="eyebrow">일상의 고민, 근거 있는 대화로</div>
+    <h1>어떤 일이<br>있었나요<span class="teal-dot">?</span></h1>
+    <p>법률 용어를 몰라도 괜찮아요.<br>내 상황부터 이야기하면, 실제 법률과 판례를 함께 살펴볼게요.</p>
+    <div class="hero-proof"><span class="proof-mark" aria-hidden="true">✓</span> 실제 법령·판례의 공식 출처를 함께 확인합니다.</div>
+  </div>
+  <div class="home-question-card"><div class="chat-card-heading"><span class="ai-monogram" aria-hidden="true">P</span><div><strong>판결읽기 AI</strong><small>내 상황을 차근차근 정리하는 대화</small></div><span class="mini-label">법률 도우미</span></div>
+    <form th:action="@{/legal-ai}" method="get" class="home-question-form"><label for="home-question">지금 가장 궁금한 점을 들려주세요.</label><textarea id="home-question" name="q" maxlength="2000" rows="4" placeholder="퇴사했는데 마지막 월급을 받지 못했어요. 무엇부터 확인하면 될까요?" required></textarea><div class="composer-actions"><small>상황 설명도, 사례 비교도 괜찮아요.</small><button type="submit">대화 시작하기 <span aria-hidden="true">↗</span></button></div></form>
+    <div class="starter-topics"><span>이렇게 시작해 보세요</span><a href="/legal-ai?q=계약이 끝났는데 보증금을 돌려받지 못했어요.">보증금을 못 받았어요 <span aria-hidden="true">↗</span></a><a href="/legal-ai?q=퇴사 후 마지막 월급을 받지 못했어요.">퇴사 후 월급이 밀렸어요 <span aria-hidden="true">↗</span></a><a href="/legal-ai?q=실제 손해배상 판결의 쟁점 차이를 비교해 주세요.">실제 판결을 비교하고 싶어요 <span aria-hidden="true">↗</span></a></div>
+  </div>
+</section>
+<section class="how-it-works" aria-label="대화 이용 방법"><div><span class="step">01</span><div><h2>편하게 이야기하고</h2><p>언제, 누구와 어떤 일이 있었는지 들려주세요.</p></div></div><div><span class="step">02</span><div><h2>쟁점을 함께 정리하고</h2><p>중요한 사실과 확인할 내용을 짚어봅니다.</p></div></div><div><span class="step">03</span><div><h2>공식 근거를 확인해요</h2><p>실제 법률·판례와 내 상황의 차이를 살펴보세요.</p></div></div></section>
+<section><div class="section-heading"><div><div class="eyebrow">대화 전에 살펴봐도 좋아요</div><h2>우리 생활과 가까운 실제 판결</h2></div><a href="/cases?type=real">실제 판결 모두 보기 →</a></div><div class="card-grid"><th:block th:each="c:${recent}"><article th:replace="~{legal/layout::card(${c})}"></article></th:block></div></section>
+<section class="home-notebook"><div><div class="eyebrow">복잡한 상황은, 한곳에</div><h2>기록이 모이면 이야기가 선명해져요.</h2><p>날짜별 기록과 증거를 사건 노트에 정리하고, 필요한 내용을 AI와 함께 살펴보세요.</p></div><a class="button secondary" href="/notebooks">내 사건 노트 열기 ↗</a></section>
 </main><footer th:replace="~{legal/layout::footer}"></footer></body></html>

@@ -22,11 +22,11 @@ public class NotebookPdfService {
     private final NotebookService notebooks;
     private final TimelineRepository timeline;
     private final ChecklistRepository checklist;
-    private final BillingService billing;
+
     private final ConsultationService consultation;
     private final Semaphore slots=new Semaphore(2);
-    public NotebookPdfService(NotebookService notebooks,TimelineRepository timeline,ChecklistRepository checklist,BillingService billing,ConsultationService consultation) {
-        this.notebooks=notebooks;this.timeline=timeline;this.checklist=checklist;this.billing=billing;this.consultation=consultation;
+    public NotebookPdfService(NotebookService notebooks,TimelineRepository timeline,ChecklistRepository checklist,ConsultationService consultation) {
+        this.notebooks=notebooks;this.timeline=timeline;this.checklist=checklist;this.consultation=consultation;
     }
     public record Preview(long notebookId,String notebookTitle,String text,int pages,String saveText) {}
     public Preview extract(String user,long id,MultipartFile file) {
@@ -62,7 +62,7 @@ public class NotebookPdfService {
     }
     public byte[] export(String user,long id,Set<String> sections,boolean notes) {
         var book=notebooks.owned(user,id);
-        billing.requirePremium(user);
+
         var lines=new ArrayList<String>();
         lines.add("판결읽기 | 나의 사건 노트");lines.add(book.title);lines.add("분야: "+book.category+" / 비공개 자료 / 출력일: "+LocalDate.now(java.time.ZoneId.of("Asia/Seoul")));
         lines.add("이 문서는 사용자가 기록한 자료이며 법률적 판단이나 증명서를 의미하지 않습니다.");
@@ -82,7 +82,7 @@ public class NotebookPdfService {
     }
     public byte[] exportConsultation(String user,long id,Set<String> sections,boolean notes) {
         var prep=consultation.prepare(user,id);
-        billing.requirePremium(user);
+
         var lines=new ArrayList<String>();
         lines.add("판결읽기 | 상담 준비 자료");lines.add(prep.title());
         lines.add("분야: "+prep.category()+" / 작성일: "+LocalDate.now(java.time.ZoneId.of("Asia/Seoul")));

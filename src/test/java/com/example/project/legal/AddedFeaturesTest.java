@@ -15,10 +15,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  @Autowired MockMvc mvc;@Autowired NotebookService service;@Autowired NotebookRepository books;@Autowired TimelineRepository timeline;@Autowired ChecklistRepository checklist;@Autowired CaseRepository cases;@Autowired TermExplainer terms;
  @BeforeEach void reset(){timeline.deleteAll();checklist.deleteAll();books.deleteAll();}
  @Test void situationAndApiPagesArePublicAndKeyStateIsHonest()throws Exception{
-  mvc.perform(get("/situation")).andExpect(status().isOk());
-  mvc.perform(get("/situation").param("topic","wage").param("agreement","yes").param("evidence","no")).andExpect(status().isOk()).andExpect(content().string(containsString("임금 항목의 지급 규칙")));
-  mvc.perform(get("/situation").param("topic","made-up")).andExpect(status().isBadRequest());
-  mvc.perform(get("/law-search").param("q","임금")).andExpect(status().isOk()).andExpect(content().string(containsString("OC 인증값 미설정"))).andExpect(content().string(not(containsString("공식 API에서 일치하는 결과를 찾지 못했습니다"))));
+  mvc.perform(get("/situation")).andExpect(redirectedUrl("/legal-ai"));
+  mvc.perform(get("/situation")).andExpect(redirectedUrl("/legal-ai"));
+  mvc.perform(get("/situation")).andExpect(redirectedUrl("/legal-ai"));
+  mvc.perform(get("/law-search").param("q","임금")).andExpect(redirectedUrl("/legal-ai?q=%EC%9E%84%EA%B8%88"));
   mvc.perform(get("/api/law/status")).andExpect(status().isOk()).andExpect(jsonPath("$.configured").value(false)).andExpect(jsonPath("$.oc").doesNotExist());
   mvc.perform(get("/api/law/search").param("q","임금")).andExpect(status().isServiceUnavailable());
   mvc.perform(get("/law-search/precedents/600537")).andExpect(status().isOk()).andExpect(content().string(containsString("OC 인증값")));
