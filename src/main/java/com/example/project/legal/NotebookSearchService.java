@@ -10,8 +10,7 @@ public class NotebookSearchService {
     public NotebookSearchService(NotebookRepository b,TimelineRepository e,ChecklistRepository c,ConsultationLogRepository l,EvidenceMapService evidence){books=b;events=e;checks=c;logs=l;this.evidence=evidence;}
     public Page<Notebook> search(String user,String query,int page){
         String term=query.strip().toLowerCase(Locale.ROOT);
-        var all=books.findByUsernameOrderByCreatedAtDesc(user);
-        all.sort(Comparator.comparing((Notebook b)->b.createdAt).thenComparing(b->b.id).reversed());
+        var all=books.findByUsernameOrderByCreatedAtDescIdDesc(user);
         List<Notebook> found=all;
         if(!term.isEmpty()&&!all.isEmpty()){
             var ids=all.stream().map(b->b.id).toList();Set<Long> matching=new HashSet<>();

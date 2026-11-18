@@ -12,15 +12,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Component
 @ConditionalOnProperty(name="legal.ai.provider",havingValue="local")
-public class LocalAiGateway implements AiGateway {
+public class LocalAiGateway implements ReasoningAiGateway {
     private final IntegrationSettings settings;private final ObjectMapper json;
     private final HttpClient client=HttpClient.newBuilder().proxy(HttpClient.Builder.NO_PROXY).connectTimeout(Duration.ofSeconds(3)).followRedirects(HttpClient.Redirect.NEVER).build();
     public LocalAiGateway(IntegrationSettings settings,ObjectMapper json){this.settings=settings;this.json=json;}
-    @Override public String explain(String system,String context) {
+    @Override public String explain(String system,String context) { return explain(system,context,true); }
+    @Override public String explain(String system,String context,boolean deepAnalysis) {
         try {
             var token=settings.value("legal.ai.local-token","");
             if(token.isBlank())throw new IllegalStateException("Local API token missing");
-            var body=Map.of("messages",List.of(Map.of("role","system","content",system),Map.of("role","user","content",context)),"max_tokens",768);
+            var body=Map.of("messages",List.of(Map.of("role","system","content",system),Map.of("role","user","content",context)),"thinking",deepAnalysis,"max_tokens",deepAnalysis?1024:512);
             var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:11435/chat")).timeout(Duration.ofSeconds(120))
                 .header("Content-Type","application/json").header("X-Local-AI-Token",token).POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
             var response=client.send(request,HttpResponse.BodyHandlers.ofInputStream());

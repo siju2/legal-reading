@@ -42,13 +42,14 @@ public class AiExplanationService {
             if(answer==null||answer.isBlank()) throw new IllegalStateException("empty answer");
             return new Explanation(entry.title,limit(answer,16000),entry.sourceUrl,MODES.get(mode));
         } catch(ResponseStatusException e) { throw e; }
-          catch(Exception e) { throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"AI 응답을 받지 못했습니다. 연결 설정과 이용 한도를 확인하고 다시 시도해 주세요."); }
+          catch(Exception e) { throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"AI 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요."); }
         finally { slots.release(); }
     }
     synchronized void reserve(String user) {
         var day=LocalDate.now(ZoneId.of("Asia/Seoul"));
         var row=usage.findByUsernameAndDate(user,day).orElseGet(()->{var u=new AiUsage();u.username=user;u.date=day;return u;});
-        if(row.attempts>=settings.dailyLimit()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"오늘의 AI 요청 한도를 사용했습니다.");
+        int limit=settings.dailyLimit();
+        if(limit>0&&row.attempts>=limit) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"오늘의 AI 요청 한도를 사용했습니다.");
         row.attempts++; usage.saveAndFlush(row);
     }
     private String limit(String value,int n) { return value==null?"":value.substring(0,Math.min(value.length(),n)); }

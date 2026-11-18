@@ -15,7 +15,7 @@ public class LawAssistantService {
     public record Answer(String text,List<Source> sources,boolean generated) {}
     private final IntegrationSettings settings;private final AiGateway gateway;private final AiExplanationService quota;
 private final NotebookService notebooks;private final TimelineRepository events;
-    private final EvidenceMapService evidence;private final List<Source> corpus;
+    private final EvidenceMapService evidence;private final List<Source> corpus;private final LegalBm25Index retrieval;
     public LawAssistantService(IntegrationSettings settings,AiGateway gateway,AiExplanationService quota,NotebookService notebooks,TimelineRepository events,EvidenceMapService evidence,ObjectMapper mapper) throws IOException {
         this.settings=settings;this.gateway=gateway;this.quota=quota;this.notebooks=notebooks;this.events=events;this.evidence=evidence;
         try (var curated=new ClassPathResource("legal-ai/sources.json").getInputStream();
@@ -27,11 +27,15 @@ private final NotebookService notebooks;private final TimelineRepository events;
             corpus=List.copyOf(sources);
         }
         for(var source:corpus)if(!LegalService.officialUrl(source.url())||source.text()==null||source.keywords()==null)throw new IllegalStateException("Invalid legal source");
+        retrieval=new LegalBm25Index(corpus);
     }
     public Answer ask(String user,String question,Long notebookId,boolean consent) {
-        return ask(user,question,notebookId,consent,"");
+        return ask(user,question,notebookId,consent,"",true);
     }
     public Answer ask(String user,String question,Long notebookId,boolean consent,String previousQuestions) {
+        return ask(user,question,notebookId,consent,previousQuestions,true);
+    }
+    public Answer ask(String user,String question,Long notebookId,boolean consent,String previousQuestions,boolean deepAnalysis) {
         LegalService.require(question!=null&&!question.isBlank()&&question.length()<=2000,"질문은 1~2,000자로 입력해 주세요.");
         Notebook book=notebookId==null?null:notebooks.owned(user,notebookId);
         if(book!=null)LegalService.require(consent,"선택한 사건 노트를 이 PC의 로컬 AI가 읽는 데 동의해 주세요.");
@@ -46,25 +50,44 @@ private final NotebookService notebooks;private final TimelineRepository events;
                 &&!query.matches(".*제\\d+조.*")) {
             return new Answer("보증금을 돌려받지 못하셨군요. 먼저 어떤 계약인지 확인할게요. 말씀하신 보증금은 살던 집의 임대차 보증금인가요?",List.of(),false);
         }
-        var current=corpus.stream().filter(source->score(source,query)>0).toList();
-        long currentBest=current.stream().mapToLong(source->score(source,query)).max().orElse(0);
-        long historyBest=history.isBlank()?0:corpus.stream().mapToLong(source->score(source,history)).max().orElse(0);
+        long[] queryScores=new long[corpus.size()],historyScores=new long[corpus.size()];
+        var current=new ArrayList<Integer>();long currentBest=0,historyBest=0;
+        for(int i=0;i<corpus.size();i++) {
+            queryScores[i]=score(corpus.get(i),query);
+            historyScores[i]=history.isBlank()?0:score(corpus.get(i),history);
+            if(queryScores[i]>0)current.add(i);
+            currentBest=Math.max(currentBest,queryScores[i]);historyBest=Math.max(historyBest,historyScores[i]);
+        }
         boolean followUp=currentBest<4&&historyBest>=4;
         String retrievalQuery=followUp?history:query;
-        var candidates=followUp||current.isEmpty()?corpus:current;
-        long best=candidates.stream().mapToLong(source->score(source,retrievalQuery)).max().orElse(0);
+        boolean scanAll=followUp||current.isEmpty();long[] retrievalScores=followUp?historyScores:queryScores;long best=0;
+        for(int i=0;i<retrievalScores.length;i++)if(scanAll||queryScores[i]>0)best=Math.max(best,retrievalScores[i]);
         long minimum=best>=4?4:1;
-        var ranked=candidates.stream()
-            .filter(source->score(source,retrievalQuery)>=minimum)
-            .sorted(Comparator.comparingLong((Source source)->score(source,retrievalQuery)*100+score(source,history)).reversed())
-            .toList();
+        var exactRanked=new ArrayList<Integer>();
+        for(int i=0;i<retrievalScores.length;i++)if((scanAll||queryScores[i]>0)&&retrievalScores[i]>=minimum)exactRanked.add(i);
+        exactRanked.sort(Comparator.comparingLong((Integer i)->retrievalScores[i]*100+historyScores[i]).reversed());
+        boolean[] selected=new boolean[corpus.size()];int[] exactRanks=new int[corpus.size()],semanticRanks=new int[corpus.size()];
+        for(int rank=0;rank<exactRanked.size();rank++) {
+            int document=exactRanked.get(rank);
+            selected[document]=true;exactRanks[document]=rank+1;
+        }
+        var semanticHits=retrieval.search(retrievalQuery,80);
+        for(int rank=0;rank<semanticHits.size();rank++) {
+            var hit=semanticHits.get(rank);
+            if(hit.score()<0.15)break;
+            selected[hit.document()]=true;semanticRanks[hit.document()]=rank+1;
+        }
+        var ranked=new ArrayList<Integer>();
+        for(int i=0;i<selected.length;i++)if(selected[i])ranked.add(i);
+        ranked.sort(Comparator.<Integer>comparingDouble(i->(exactRanks[i]==0?0:1.0/(60+exactRanks[i]))+(semanticRanks[i]==0?0:1.0/(60+semanticRanks[i]))).reversed()
+            .thenComparing(Comparator.comparingLong((Integer i)->retrievalScores[i]*100+historyScores[i]).reversed()));
         var grouped=new LinkedHashMap<String,List<Source>>();
-        ranked.forEach(source->grouped.computeIfAbsent(source.url(),ignored->new ArrayList<>()).add(source));
+        ranked.forEach(i->{var source=corpus.get(i);grouped.computeIfAbsent(source.url(),ignored->new ArrayList<>()).add(source);});
         var sources=grouped.values().stream().limit(4).map(this::mergeExcerpts).toList();
         if(sources.isEmpty())return new Answer("어떤 일이 있었는지 편하게 말씀해 주세요. 언제, 누구와 어떤 문제가 생겼는지 알려주시면 관련 실제 법령과 판례를 함께 살펴볼게요.",List.of(),false);
         quota.reserve(user);
         var context=new StringBuilder("공식 출처를 확인해 정리한 자료(원문 전체가 아닌 요약·발췌):\n");
-        for(int i=0;i<sources.size();i++) {var s=sources.get(i);context.append("[").append(i+1).append("] ").append(s.title()).append(" / 확인일 ").append(s.checkedAt()).append("\n").append(cut(s.text(),2600)).append("\n");}
+        for(int i=0;i<sources.size();i++) {var s=sources.get(i);context.append("[").append(i+1).append("] ").append(s.title()).append(" / 확인일 ").append(s.checkedAt()).append("\n").append(retrieval.excerpt(s.text(),retrievalQuery,2600)).append("\n");}
         if(!previous.isBlank())context.append("\n이전 대화(사용자와 AI의 발언, 사실 확인 전 맥락):\n").append(previous);
         if(book!=null)context.append("\n사건 노트: 사용자 작성 내용이며 검증된 사실이나 법령이 아닙니다.\n").append(notebookContext(book));
         context.append("\n사용자의 이번 질문: ").append(question);
@@ -73,13 +96,46 @@ private final NotebookService notebooks;private final TimelineRepository events;
             +"먼저 사용자의 질문 의도를 파악하고, 이미 사용자가 제공한 사실을 다시 묻지 마라. 직전 AI의 확인 질문에 대한 짧은 답변은 그 질문에 대한 답으로 이해하라. "
             +"상황 상담은 첫 문장에 질문에 대한 직접 답을 말하고, 다음에 관련 근거와 그 사실에 적용되는 조건을 쉬운 말로 설명하라. 사용자가 준 사실과 아직 확인되지 않은 사실을 구분하고, 적용법을 가르는 사실이나 결론에 필요한 핵심 정보가 빠졌다면 일반론을 길게 늘어놓지 말고 가장 중요한 질문을 한 번에 하나만 하라. 답할 수 있는 내용이 충분하면 불필요한 질문으로 끝내지 마라. "
             +"특히 보증금만으로 주택 임대차를 가정하지 마라. 임대차 종류가 불분명하면 집인지 상가인지 먼저 확인하라. 자료의 문장을 통째로 복사하거나 매번 같은 목차·주의문·체크리스트를 반복하지 마라. 사용자를 직접 부르는 자연스러운 존댓말을 쓰고, 제3자 보고서 문체를 피하라. 보통 2~5문장으로 답하되 사용자가 자세한 설명을 요청하면 필요한 만큼 풀어라. "
-            +"사례 비교는 각 실제 판결의 쟁점과 결론을 나눠 비교하고, 자료에 있는 법원·선고일·사건번호만 그대로 쓴다. 근거 번호 [1]은 실제 답변에 사용한 제공 자료에만 붙이고, 확인 질문이나 자료와 무관한 문장에는 붙이지 마라. 자료가 없으면 근거 번호를 쓰지 마라. 법령의 적용 시점이나 예외가 중요할 때만 짧게 덧붙여라. 같은 주의사항을 모든 답변에 반복하지 말고, 불확실하면 단정 대신 확인 가능한 범위를 명확히 하라.";
-        String answer=gateway.explain(system,context.toString());
+            +"사례 비교는 각 실제 판결의 쟁점과 결론을 나눠 비교하고, 자료에 있는 법원·선고일·사건번호만 그대로 쓴다. 근거 번호 [1]은 실제 답변에 사용한 제공 자료에만 붙이고, 확인 질문이나 자료와 무관한 문장에는 붙이지 마라. 자료가 없으면 근거 번호를 쓰지 마라. 법령의 적용 시점이나 예외가 중요할 때만 짧게 덧붙여라. 같은 주의사항을 모든 답변에 반복하지 말고, 불확실하면 단정 대신 확인 가능한 범위를 명확히 하라. 최종 답변 전 조문 번호·날짜·사건번호를 연결한 공식 자료와 대조하고, 근거에 없는 세부사항은 빼거나 확인할 수 없다고 밝혀라.";
+        String answer=gateway instanceof ReasoningAiGateway reasoning
+            ?reasoning.explain(system,context.toString(),deepAnalysis):gateway.explain(system,context.toString());
         if(answer==null||answer.isBlank())throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"로컬 AI가 빈 답변을 반환했습니다.");
         var citation=java.util.regex.Pattern.compile("\\[(\\d+)\\]").matcher(answer);var cleaned=new StringBuffer();
         while(citation.find()){boolean valid;try{int number=Integer.parseInt(citation.group(1));valid=number>0&&number<=sources.size();}catch(NumberFormatException invalid){valid=false;}citation.appendReplacement(cleaned,valid?java.util.regex.Matcher.quoteReplacement(citation.group()):"");}
         citation.appendTail(cleaned);
-        return new Answer(cut(cleaned.toString(),16000),List.copyOf(sources),true);
+        String grounded=cleaned.toString();
+        if(hasUnsupportedArticle(grounded,sources))return new Answer("제공된 공식 자료에서 확인되지 않는 조문 번호가 포함되어 답변을 보류했어요. 자료로 확인되는 범위만 다시 살펴봐 주세요.",List.copyOf(sources),false);
+        return new Answer(cut(grounded,16000),List.copyOf(sources),true);
+    }
+    private static boolean hasUnsupportedArticle(String answer,List<Source> sources) {
+        var articles=java.util.regex.Pattern.compile("제\\s*\\d+\\s*조(?:\\s*의\\s*\\d+)?").matcher(answer);
+        while(articles.find()) {
+            String article=articles.group().replaceAll("\\s+","");
+            int start=0,end=answer.length();
+            for(char boundary:new char[]{'\n','.','!','?','。','！','？'}) {
+                start=Math.max(start,answer.lastIndexOf(boundary,articles.start()-1)+1);
+                int next=answer.indexOf(boundary,articles.end());
+                if(next>=0)end=Math.min(end,next);
+            }
+            String clause=answer.substring(start,end);
+            var citations=java.util.regex.Pattern.compile("\\[(\\d+)\\]").matcher(clause);
+            boolean cited=false,grounded=false;
+            while(citations.find()) {
+                cited=true;
+                int index=Integer.parseInt(citations.group(1))-1;
+                if(index>=0&&index<sources.size()&&containsArticle(sources.get(index),article))grounded=true;
+            }
+            if(cited&&!grounded)return true;
+            if(!cited&&!sources.stream().anyMatch(source->containsArticle(source,article))) {
+                String nearby=answer.substring(articles.start(),Math.min(answer.length(),articles.end()+24));
+                if(!nearby.matches("(?s).*(?:존재하지|확인되지|자료에 없는|허구|가짜).*"))return true;
+            }
+        }
+        return false;
+    }
+    private static boolean containsArticle(Source source,String article) {
+        String evidence=(source.title()+"\n"+source.text()).replaceAll("\\s+","");
+        return java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(article)+"(?!의\\d+)").matcher(evidence).find();
     }
     private long score(Source source,String query) {
         return source.keywords().stream().distinct().filter(query::contains)

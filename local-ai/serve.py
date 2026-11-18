@@ -16,12 +16,17 @@ class LocalModel:
             from peft import PeftModel
             model=PeftModel.from_pretrained(model,adapter,local_files_only=True)
         self.model=model.eval()
-    def answer(self,messages,max_tokens):
-        inputs=self.tokenizer.apply_chat_template(messages,add_generation_prompt=True,enable_thinking=False,tokenize=True,return_dict=True,return_tensors='pt').to('cuda')
+    def answer(self,messages,max_tokens,thinking=True):
+        inputs=self.tokenizer.apply_chat_template(messages,add_generation_prompt=True,enable_thinking=thinking,tokenize=True,return_dict=True,return_tensors='pt').to('cuda')
         if inputs['input_ids'].shape[1]>8192:raise ValueError('Input too long')
         with self.torch.inference_mode():
-            output=self.model.generate(**inputs,max_new_tokens=max_tokens,do_sample=False,repetition_penalty=1.08,pad_token_id=self.tokenizer.eos_token_id)
-        return self.tokenizer.decode(output[0][inputs['input_ids'].shape[1]:],skip_special_tokens=True).strip()
+            output=self.model.generate(**inputs,max_new_tokens=max_tokens,do_sample=True,temperature=0.6 if thinking else 0.7,top_p=0.95 if thinking else 0.8,top_k=20,pad_token_id=self.tokenizer.eos_token_id)
+        generated=output[0][inputs['input_ids'].shape[1]:].tolist()
+        if not thinking:return self.tokenizer.decode(generated,skip_special_tokens=True).strip()
+        think_end=self.tokenizer.convert_tokens_to_ids('</think>')
+        if think_end is None or think_end==self.tokenizer.unk_token_id or think_end not in generated:
+            return '검토가 충분히 끝나지 않아 답변을 보류했어요. 질문을 조금 나눠서 다시 말씀해 주세요.'
+        return self.tokenizer.decode(generated[generated.index(think_end)+1:],skip_special_tokens=True).strip()
 
 class Handler(BaseHTTPRequestHandler):
     def setup(self):super().setup();self.connection.settimeout(15)
@@ -48,11 +53,13 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(payload);messages=data.get('messages')
             if not isinstance(messages,list) or len(messages)!=2 or [m.get('role') for m in messages]!=['system','user']:raise ValueError('Invalid messages')
             if any(not isinstance(m.get('content'),str) or len(m['content'])>20000 for m in messages):raise ValueError('Invalid content')
-            max_tokens=max(64,min(768,int(data.get('max_tokens',512))))
+            max_tokens=max(64,min(1024,int(data.get('max_tokens',512))))
+            thinking=data.get('thinking',True)
+            if not isinstance(thinking,bool):raise ValueError('Invalid reasoning mode')
         except (ValueError,TypeError,AttributeError):return self.send_json(400,{'error':'Invalid request'})
         if not self.server.busy.acquire(blocking=False):return self.send_json(429,{'error':'Model busy'})
         try:
-            answer=self.server.runtime.answer(messages,max_tokens)
+            answer=self.server.runtime.answer(messages,max_tokens,thinking)
             if not answer:raise RuntimeError('Empty response')
             self.send_json(200,{'answer':answer})
         except ValueError:self.send_json(413,{'error':'Input exceeds context limit'})

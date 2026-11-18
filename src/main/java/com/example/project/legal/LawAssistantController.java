@@ -17,18 +17,18 @@ public class LawAssistantController {
         populate(user,notebookId,model,response);return "legal/law-assistant";
     }
     @PostMapping("/legal-ai")
-    String ask(Principal user,@RequestParam String question,@RequestParam(required=false) Long notebookId,@RequestParam(defaultValue="false") boolean consent,Model model,HttpServletResponse response){
+    String ask(Principal user,@RequestParam String question,@RequestParam(required=false) Long notebookId,@RequestParam(defaultValue="false") boolean consent,@RequestParam(defaultValue="deep") String mode,Model model,HttpServletResponse response){
         response.setHeader("Cache-Control","no-store");
-        model.addAttribute("answer",assistant.ask(user.getName(),question,notebookId,consent));model.addAttribute("question",question);
+        model.addAttribute("answer",assistant.ask(user.getName(),question,notebookId,consent,"","deep".equals(mode)));model.addAttribute("question",question);
         populate(user,notebookId,model,response);return "legal/law-assistant";
     }
     @PostMapping("/legal-ai/chat")
     @ResponseBody
     LawAssistantService.Answer chat(Principal user,@RequestParam String question,
             @RequestParam(defaultValue="") String context,@RequestParam(required=false) Long notebookId,
-            @RequestParam(defaultValue="false") boolean consent,HttpServletResponse response){
+            @RequestParam(defaultValue="false") boolean consent,@RequestParam(defaultValue="deep") String mode,HttpServletResponse response){
         response.setHeader("Cache-Control","no-store");
-        return assistant.ask(user.getName(),question,notebookId,consent,context);
+        return assistant.ask(user.getName(),question,notebookId,consent,context,"deep".equals(mode));
     }
     private void populate(Principal user,Long notebookId,Model model,HttpServletResponse response){
         response.setHeader("Cache-Control","no-store");model.addAttribute("notebooks",books.findTop100ByUsernameOrderByCreatedAtDesc(user.getName()));

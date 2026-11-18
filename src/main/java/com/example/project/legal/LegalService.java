@@ -17,7 +17,7 @@ public class LegalService {
  public CaseEntry entry(long id,boolean admin){var c=cases.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));if(!c.published&&!admin)throw new ResponseStatusException(HttpStatus.NOT_FOUND);return c;}
  public List<CaseEntry> search(String q,String category,String type){
   require(q.length()<=160,"검색어는 160자 이하로 입력해 주세요.");require(category.isBlank()||CATEGORIES.contains(category),"분야를 확인해 주세요.");require(List.of("all","real","demo").contains(type),"자료 유형을 확인해 주세요.");
-  var terms=expand(q);return cases.findByPublishedTrueOrderByDecisionDateDescIdDesc().stream().filter(c->category.isBlank()||c.category.equals(category)).filter(c->type.equals("all")||(type.equals("demo")==c.demo)).filter(c->q.isBlank()||terms.stream().anyMatch(t->searchable(c).contains(t))).toList();
+  var terms=expand(q);return cases.findByPublishedTrueOrderByDecisionDateDescIdDesc().stream().filter(c->category.isBlank()||c.category.equals(category)).filter(c->type.equals("all")||(type.equals("demo")==c.demo)).filter(c->{if(q.isBlank())return true;String text=searchable(c);return terms.stream().anyMatch(text::contains);}).toList();
  }
  private String searchable(CaseEntry c){return (c.title+" "+c.summary+" "+c.tags+" "+c.issue+" "+c.reasoning+" "+c.caseNumber+" "+c.court).toLowerCase(Locale.ROOT);}
  private List<String> expand(String q){var result=new ArrayList<>(Arrays.asList(q.trim().toLowerCase(Locale.ROOT).split("\\s+")));var aliases=Map.of("월급","임금","알바","임금","집주인","보증금","전세","보증금","빌려","대여금","중고","하자","악플","모욕","상여금","통상임금");aliases.forEach((k,v)->{if(q.contains(k))result.add(v);});result.removeIf(String::isBlank);return result;}

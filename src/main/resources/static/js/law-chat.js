@@ -62,7 +62,8 @@ form.addEventListener('submit', async event => {
     const pending = message('나', question, true);
     send.disabled = reset.disabled = true;
     input.disabled = true;
-    status.textContent = '관련 근거를 찾고 답변을 작성하고 있습니다.';
+    const deepAnalysis = data.get('mode') === 'deep';
+    status.textContent = deepAnalysis ? '공식 근거를 대조하며 자세히 검토하고 있습니다.' : '관련 근거를 찾아 핵심을 정리하고 있습니다.';
     try {
         const response = await fetch(form.action + '/chat', {method: 'POST', body: data});
         if (response.redirected) {
@@ -72,14 +73,14 @@ form.addEventListener('submit', async event => {
         if (!response.ok) {
             status.textContent = {
                 400: '질문과 사건 노트 동의 여부를 확인해 주세요.',
-                429: '요청 한도에 도달했거나 AI가 답변 중입니다.',
+                429: 'AI가 이미 답변 중입니다. 잠시 후 다시 시도해 주세요.',
                 503: '로컬 AI가 연결되지 않았습니다.'
             }[response.status] || '답변을 받지 못했습니다. 다시 시도해 주세요.';
             return;
         }
         const answer = await response.json();
 
-        const card = message('법률 AI', answer.text);
+        const card = message('법률 AI · ' + (deepAnalysis ? '깊은 분석' : '빠른 답변'), answer.text);
         const comparing = /비교|차이/.test(question) && answer.sources.length > 1;
         if (comparing) card.classList.add('law-message-comparison');
         if (answer.sources.length) {

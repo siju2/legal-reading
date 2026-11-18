@@ -1,6 +1,7 @@
 package com.example.project.legal;
 
 import com.example.project.legal.NotebookModels.*;
+import com.example.project.legal.LegalModels.CaseEntry;
 import com.fasterxml.jackson.databind.*;
 import java.io.IOException;
 import java.time.*;
@@ -27,20 +28,28 @@ public class NotebookBackupService {
     }
     @Transactional(readOnly=true)
     public byte[] export(String user,Long id){
-        List<Notebook> notebooks=id==null?books.findByUsernameOrderByCreatedAtDesc(user):List.of(service.owned(user,id));
+        List<Notebook> notebooks=id==null?books.findTop101ByUsernameOrderByCreatedAtDesc(user):List.of(service.owned(user,id));
         LegalService.require(notebooks.size()<=100,"한 번에 100개까지 백업할 수 있습니다. 노트별 백업을 이용해 주세요.");
-        var data=notebooks.stream().map(this::bookData).toList();
+        var ids=notebooks.stream().map(b->b.id).toList();
+        var timelines=ids.isEmpty()?List.<Event>of():events.findByNotebookIdInOrderByOccurredOnAscIdAsc(ids);
+        var items=ids.isEmpty()?List.<CheckItem>of():checks.findByNotebookIdInOrderByIdAsc(ids);
+        var followups=ids.isEmpty()?List.<ConsultationLog>of():logs.findByNotebookIdInOrderByConsultedOnAscIdAsc(ids);
+        var sourceIds=notebooks.stream().map(b->b.sourceCaseId).filter(Objects::nonNull).distinct().toList();
+        var sourceCases=sourceIds.isEmpty()?Map.<Long,CaseEntry>of():cases.findAllById(sourceIds).stream().collect(java.util.stream.Collectors.toMap(c->c.id,c->c));
+        var timelineByBook=timelines.stream().collect(java.util.stream.Collectors.groupingBy(e->e.notebookId));
+        var itemsByBook=items.stream().collect(java.util.stream.Collectors.groupingBy(c->c.notebookId));
+        var followupsByBook=followups.stream().collect(java.util.stream.Collectors.groupingBy(l->l.notebookId));
+        var data=notebooks.stream().map(b->bookData(b,timelineByBook.getOrDefault(b.id,List.of()),itemsByBook.getOrDefault(b.id,List.of()),followupsByBook.getOrDefault(b.id,List.of()),sourceCases)).toList();
         Backup backup=new Backup("legal-notebooks",1,data);validate(backup);
         try {byte[] bytes=mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(backup);LegalService.require(bytes.length<=MAX_BYTES,"백업이 5MB를 초과했습니다. 노트별로 백업해 주세요.");return bytes;}
         catch(IOException e){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"백업 파일을 만들지 못했습니다.");}
     }
-    private BookData bookData(Notebook b) {
-        var timeline=events.findByNotebookIdOrderByOccurredOnAscIdAsc(b.id);
+    private BookData bookData(Notebook b,List<Event> timeline,List<CheckItem> items,List<ConsultationLog> followups,Map<Long,CaseEntry> sourceCases) {
         var positions=new HashMap<Long,Integer>();for(int i=0;i<timeline.size();i++)positions.put(timeline.get(i).id,i);
-        return new BookData(b.title,b.category,publicSource(b.sourceCaseId,b.category),text(b.consultationSummary),text(b.consultationQuestions),text(b.consultationGoal),
+        return new BookData(b.title,b.category,b.sourceCaseId==null?null:publicSource(sourceCases.get(b.sourceCaseId),b.category),text(b.consultationSummary),text(b.consultationQuestions),text(b.consultationGoal),
             timeline.stream().map(e->new EventData(e.occurredOn,e.kind,e.title,e.note)).toList(),
-            checks.findByNotebookIdOrderByIdAsc(b.id).stream().map(c->new ItemData(c.label,c.completed)).toList(),
-            logs.findByNotebookIdOrderByConsultedOnAscIdAsc(b.id).stream().map(l->new LogData(l.consultedOn,l.answer,l.nextActions,l.completed)).toList(),
+            items.stream().map(c->new ItemData(c.label,c.completed)).toList(),
+            followups.stream().map(l->new LogData(l.consultedOn,l.answer,l.nextActions,l.completed)).toList(),
             evidence.read(b).stream().map(c->new EvidenceData(c.kind(),c.title(),positions.get(c.eventId()),c.gap(),c.nextAction())).toList());
     }
     @Transactional
@@ -79,7 +88,8 @@ public class NotebookBackupService {
             for(var l:b.followups()){LegalService.require(l!=null,"상담 후 기록을 확인해 주세요.");date(l.date());required(l.answer(),4000,"상담 답변");length(l.nextActions(),2000,"다음 할 일");}
         }
     }
-    private Long publicSource(Long id,String category){return id==null?null:cases.findById(id).filter(c->c.published&&c.category.equals(category)).map(c->c.id).orElse(null);}
+    private Long publicSource(Long id,String category){return id==null?null:publicSource(cases.findById(id).orElse(null),category);}
+    private Long publicSource(CaseEntry source,String category){return source!=null&&source.published&&Objects.equals(source.category,category)?source.id:null;}
     private void date(LocalDate date){LegalService.require(date!=null&&!date.isAfter(LocalDate.now()),"백업의 날짜는 오늘 또는 이전이어야 합니다.");}
     private void required(String value,int max,String name){LegalService.require(value!=null&&!value.isBlank(),name+"을 확인해 주세요.");length(value,max,name);}
     private void length(String value,int max,String name){LegalService.require(value==null||value.length()<=max,name+"의 글자 수를 확인해 주세요.");}

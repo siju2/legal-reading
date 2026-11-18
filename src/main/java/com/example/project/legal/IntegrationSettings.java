@@ -11,5 +11,5 @@ public class IntegrationSettings {
     public boolean flag(String key) { return Boolean.parseBoolean(value(key, "false")); }
     public boolean localAi() { return "local".equals(value("legal.ai.provider", "openai")); }
     public boolean aiReady() { return flag("legal.ai.enabled") && (localAi() || !value("legal.ai.api-key", "").isBlank()); }
-    public int dailyLimit() { return Integer.parseInt(value("legal.ai.daily-limit", "10")); }
+    public int dailyLimit() { return Integer.parseInt(value("legal.ai.daily-limit", "0")); }
 }
