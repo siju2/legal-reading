@@ -2,7 +2,7 @@
 
 ## 바로 사용하는 기능
 
-- 상황별 질문: http://localhost:8080/situation
+- AI 채팅: http://localhost:8080/legal-ai
 - 본문 밑줄 용어를 눌러 쉬운 설명 확인
 - 나의 사건 노트: http://localhost:8080/notebooks (로그인 필요)
 - 노트별 날짜순 타임라인, 자료 체크리스트와 진행률
