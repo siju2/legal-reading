@@ -86,7 +86,7 @@ form.addEventListener('submit', async event => {
         if (answer.sources.length) {
             const details = document.createElement('details');
             const summary = document.createElement('summary');
-            summary.textContent = '법령·판례 근거 ' + answer.sources.length + '건';
+            summary.textContent = '법령 근거·실시간 검색 결과 ' + answer.sources.length + '건';
             const list = document.createElement('ol');
             for (const source of answer.sources) {
                 const item = document.createElement('li');
@@ -98,7 +98,7 @@ form.addEventListener('submit', async event => {
                 const text = document.createElement('p');
                 text.textContent = source.text;
                 const checked = document.createElement('small');
-                checked.textContent = '자료 확인일 ' + source.checkedAt;
+                checked.textContent = source.id.startsWith('web-search-') ? '실시간 공식 웹 검색 미리보기 · 원문 열기' : source.id.startsWith('online-search-') ? '공식 검색 페이지 · 클릭하면 최신 검색 결과' : '자료 확인일 ' + source.checkedAt;
                 item.append(link, checked, text);
                 list.append(item);
             }

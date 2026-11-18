@@ -2,6 +2,18 @@
 import argparse, hmac, json, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
+
+def search_official_web(query):
+    from ddgs import DDGS
+    rows=DDGS(timeout=15).text(f'{query} site:law.go.kr OR site:scourt.go.kr',region='kr-kr',safesearch='moderate',max_results=8,backend='bing')
+    results=[]
+    for row in rows:
+        url=row.get('href','');host=(urlsplit(url).hostname or '').lower()
+        if url.startswith('https://') and (host=='law.go.kr' or host.endswith('.law.go.kr') or host=='scourt.go.kr' or host.endswith('.scourt.go.kr')):
+            results.append({'title':row.get('title','')[:200],'url':url[:2048],'snippet':row.get('body','')[:1600]})
+            if len(results)==5:break
+    return results
 
 class LocalModel:
     def __init__(self, base, adapter, use_adapter=False):
@@ -45,12 +57,18 @@ class Handler(BaseHTTPRequestHandler):
             if 0<length<=65537:self.rfile.read(length)
             return self.send_json(413,{'error':'Invalid body size'})
         payload=self.rfile.read(length)
-        if self.path!='/chat':return self.send_json(404,{'error':'Not found'})
+        if self.path not in ('/chat','/search'):return self.send_json(404,{'error':'Not found'})
         if self.headers.get('Origin'):return self.send_json(403,{'error':'Browser requests are not allowed'})
         if not hmac.compare_digest(self.headers.get('X-Local-AI-Token','').encode(),self.server.token.encode()):return self.send_json(401,{'error':'Unauthorized'})
         if self.headers.get_content_type()!='application/json':return self.send_json(415,{'error':'JSON required'})
         try:
-            data=json.loads(payload);messages=data.get('messages')
+            data=json.loads(payload)
+            if self.path=='/search':
+                query=data.get('query')
+                if not isinstance(query,str) or not query.strip() or len(query)>500:raise ValueError('Invalid search query')
+                try:return self.send_json(200,{'results':search_official_web(query.strip())})
+                except Exception:return self.send_json(502,{'error':'Web search unavailable'})
+            messages=data.get('messages')
             if not isinstance(messages,list) or len(messages)!=2 or [m.get('role') for m in messages]!=['system','user']:raise ValueError('Invalid messages')
             if any(not isinstance(m.get('content'),str) or len(m['content'])>20000 for m in messages):raise ValueError('Invalid content')
             max_tokens=max(64,min(1024,int(data.get('max_tokens',512))))
