@@ -84,8 +84,9 @@ private final NotebookService notebooks;private final TimelineRepository events;
         var grouped=new LinkedHashMap<String,List<Source>>();
         ranked.forEach(i->{var source=corpus.get(i);grouped.computeIfAbsent(source.url(),ignored->new ArrayList<>()).add(source);});
         var localSources=grouped.values().stream().limit(4).map(this::mergeExcerpts).toList();
-        var webSources=requestsWebSearch(question)?webSearch.search(webQuery(question)):List.<Source>of();
-        var searchLinks=webSources.isEmpty()?officialSearchLinks(question):List.<Source>of();
+        String safeWebQuery=webQuery(question);
+        var webSources=requestsWebSearch(question)&&!safeWebQuery.isBlank()?webSearch.search(safeWebQuery):List.<Source>of();
+        var searchLinks=webSources.isEmpty()?officialSearchLinks(question,safeWebQuery):List.<Source>of();
         var sources=new ArrayList<Source>();
         webSources.stream().limit(3).forEach(sources::add);
         if(webSources.isEmpty())localSources.stream().limit(searchLinks.isEmpty()?4:2).forEach(sources::add);
@@ -105,6 +106,7 @@ private final NotebookService notebooks;private final TimelineRepository events;
             +"상황 상담은 첫 문장에 질문에 대한 직접 답을 말하고, 다음에 관련 근거와 그 사실에 적용되는 조건을 쉬운 말로 설명하라. 사용자가 준 사실과 아직 확인되지 않은 사실을 구분하고, 적용법을 가르는 사실이나 결론에 필요한 핵심 정보가 빠졌다면 일반론을 길게 늘어놓지 말고 가장 중요한 질문을 한 번에 하나만 하라. 답할 수 있는 내용이 충분하면 불필요한 질문으로 끝내지 마라. "
             +"특히 보증금만으로 주택 임대차를 가정하지 마라. 임대차 종류가 불분명하면 집인지 상가인지 먼저 확인하라. 자료의 문장을 통째로 복사하거나 매번 같은 목차·주의문·체크리스트를 반복하지 마라. 사용자를 직접 부르는 자연스러운 존댓말을 쓰고, 제3자 보고서 문체를 피하라. 보통 2~5문장으로 답하되 사용자가 자세한 설명을 요청하면 필요한 만큼 풀어라. "
             +"사례 비교는 각 실제 판결의 쟁점과 결론을 나눠 비교하고, 자료에 있는 법원·선고일·사건번호만 그대로 쓴다. 근거 번호 [1]은 실제 답변에 사용한 제공 자료에만 붙이고, 확인 질문이나 자료와 무관한 문장에는 붙이지 마라. 자료가 없으면 근거 번호를 쓰지 마라. 법령의 적용 시점이나 예외가 중요할 때만 짧게 덧붙여라. 같은 주의사항을 모든 답변에 반복하지 말고, 불확실하면 단정 대신 확인 가능한 범위를 명확히 하라. 최종 답변 전 조문 번호·날짜·사건번호를 연결한 공식 자료와 대조하고, 근거에 없는 세부사항은 빼거나 확인할 수 없다고 밝혀라. 사용자가 링크를 요청하면 제공된 공식 링크를 그대로 안내하고, 검색 페이지 내용을 확인했다고 말하지 마라. 공식 검색 링크는 법률 내용의 근거로 인용하지 마라.";
+        system+=" 여러 사실을 들으면 핵심 사실을 짧게 요약하고, 확인된 사실과 추정을 구분하라. 결론에 필요한 중요한 사실이 빠졌으면 가장 중요한 질문 하나만 먼저 물어라. 충분히 답할 수 있으면 지금 할 일을 우선순위 1~3개로 제안하고, 확인할 자료와 공식 기관을 함께 안내하라. 기한·절차는 근거에 없으면 숫자를 만들지 말고 확인 필요성을 밝혀라. 복잡한 상황이나 비교에만 짧은 항목형 정리를 쓰고 단순 질문은 자연스러운 대화로 답하라.";
         String answer=gateway instanceof ReasoningAiGateway reasoning
             ?reasoning.explain(system,context.toString(),deepAnalysis):gateway.explain(system,context.toString());
         if(answer==null||answer.isBlank())throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"로컬 AI가 빈 답변을 반환했습니다.");
@@ -124,9 +126,9 @@ private final NotebookService notebooks;private final TimelineRepository events;
         while(citation.find()){boolean valid;try{int number=Integer.parseInt(citation.group(1));valid=number>0&&number<=sourceCount;}catch(NumberFormatException invalid){valid=false;}citation.appendReplacement(cleaned,valid?java.util.regex.Matcher.quoteReplacement(citation.group()):"");}
         citation.appendTail(cleaned);return cleaned.toString();
     }
-    private static List<Source> officialSearchLinks(String question) {
-        if(!java.util.regex.Pattern.compile("링크|주소|원문|공식\\s*(?:사이트|출처)|검색|찾아|최신|현행|실시간").matcher(question).find())return List.of();
-        String query=java.net.URLEncoder.encode(question.strip(),java.nio.charset.StandardCharsets.UTF_8);
+    private static List<Source> officialSearchLinks(String question,String safeQuery) {
+        if(safeQuery.isBlank()||!java.util.regex.Pattern.compile("링크|주소|원문|공식\\s*(?:사이트|출처)|검색|찾아|최신|현행|실시간").matcher(question).find())return List.of();
+        String query=java.net.URLEncoder.encode(safeQuery,java.nio.charset.StandardCharsets.UTF_8);
         boolean law=java.util.regex.Pattern.compile("법령|법률|조문|법의|법상").matcher(question).find();
         boolean cases=java.util.regex.Pattern.compile("판례|판결|사례|사건번호").matcher(question).find();
         var links=new ArrayList<Source>();
@@ -138,7 +140,12 @@ private final NotebookService notebooks;private final TimelineRepository events;
     private static String webQuery(String question) {
         String query=question.replaceAll("(?i)[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}"," ")
             .replaceAll("(?<!\\d)(?:\\d{6}-?\\d{7}|(?:01[016789]|0[2-6])-?\\d{3,4}-?\\d{4})(?!\\d)"," ")
-            .replaceAll("인터넷|웹\\s*검색|검색해|찾아|링크|주소|원문|공식|최신|현행|실시간|오늘\\s*기준|알려줘|알려주세요|해주세요|해줘"," ")
+            .replaceAll("(?<!\\d)\\d{3,4}[- ]\\d{3,4}[- ]\\d{4,6}(?!\\d)"," ")
+            .replaceAll("(?<!\\d)(?:\\d[ -]?){13,19}(?!\\d)"," ")
+            .replaceAll("(?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원(?:특별자치)?|충청[남북]|전라[남북]|경상[남북]|제주(?:특별자치)?)\\s*(?:특별시|광역시|특별자치시|도)?\\s+[가-힣0-9-]{1,12}(?:시|구|군)\\s+[가-힣0-9-]{1,12}(?:동|로|길|읍|면|리)\\s*\\d*(?:-\\d+)?(?:\\s*\\d+동\\s*\\d+호)?"," ")
+            .replaceAll("(?:주소지?|연락처|전화번호|계좌(?:번호)?|카드(?:번호)?|주민등록번호|성명|실명|이름)\\s*(?:은|는|이|가|[:：])\\s*[^\\s,.;!?\\n]+"," ")
+            .replaceAll("(?:저는|제가|저희는|제\\s*이름은)\\s*[가-힣]{2,4}"," ")
+            .replaceAll("인터넷|웹\\s*검색|검색해|찾아|링크|주소|원문|공식|최신|현행|실시간|오늘\\s*기준|알려줘|알려주세요|해주세요|해줘|주라|좀"," ")
             .replaceAll("\\s+"," ").strip();
         return query.length()>250?query.substring(0,250):query;
     }

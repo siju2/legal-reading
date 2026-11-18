@@ -28,12 +28,13 @@ final class LocalWebSearch {
                 .header("Content-Type","application/json").header("X-Local-AI-Token",token).POST(HttpRequest.BodyPublishers.ofString(body)).build();
             var response=client.send(request,HttpResponse.BodyHandlers.ofString());
             if(response.statusCode()!=200)return List.of();
-            var rows=json.readTree(response.body()).path("results");var sources=new ArrayList<LawAssistantService.Source>();
+            if(response.body().length()>32768)return List.of();
+            var rows=json.readTree(response.body()).path("results");if(!rows.isArray())return List.of();var sources=new ArrayList<LawAssistantService.Source>();
             for(var row:rows) {
                 String url=row.path("url").asText("");
                 if(!officialUrl(url))continue;
-                String title=row.path("title").asText("공식 법률 자료").strip();
-                String snippet=row.path("snippet").asText("").strip();
+                String title=row.path("title").asText("공식 법률 자료");title=title.substring(0,Math.min(title.length(),200)).strip();
+                String snippet=row.path("snippet").asText("");snippet=snippet.substring(0,Math.min(snippet.length(),1600)).strip();
                 sources.add(new LawAssistantService.Source("web-search-"+(sources.size()+1),title,
                     "실시간 검색 결과 발췌(검색엔진 요약이며 원문 전체가 아닙니다):\n"+snippet,url,LocalDate.now().toString(),List.of()));
                 if(sources.size()==5)break;
@@ -43,10 +44,6 @@ final class LocalWebSearch {
     }
 
     private static boolean officialUrl(String value) {
-        try {
-            URI uri=URI.create(value);String host=uri.getHost();
-            return "https".equalsIgnoreCase(uri.getScheme())&&host!=null
-                &&(host.equals("law.go.kr")||host.endsWith(".law.go.kr")||host.equals("scourt.go.kr")||host.endsWith(".scourt.go.kr"));
-        } catch(IllegalArgumentException ignored){return false;}
+        return LegalService.officialUrl(value);
     }
 }
