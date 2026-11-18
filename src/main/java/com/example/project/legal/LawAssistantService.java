@@ -19,8 +19,10 @@ private final NotebookService notebooks;private final TimelineRepository events;
     public LawAssistantService(IntegrationSettings settings,AiGateway gateway,AiExplanationService quota,NotebookService notebooks,TimelineRepository events,EvidenceMapService evidence,ObjectMapper mapper) throws IOException {
         this.settings=settings;this.gateway=gateway;this.quota=quota;this.notebooks=notebooks;this.events=events;this.evidence=evidence;
         try (var curated=new ClassPathResource("legal-ai/sources.json").getInputStream();
+             var researched=new ClassPathResource("legal-ai/sources-research-100.json").getInputStream();
              var official=new ClassPathResource("legal-ai/sources-bulk.json").getInputStream()) {
             var sources=new ArrayList<>(Arrays.asList(mapper.readValue(curated,Source[].class)));
+            sources.addAll(Arrays.asList(mapper.readValue(researched,Source[].class)));
             sources.addAll(Arrays.asList(mapper.readValue(official,Source[].class)));
             corpus=List.copyOf(sources);
         }
@@ -45,8 +47,11 @@ private final NotebookService notebooks;private final TimelineRepository events;
             return new Answer("보증금을 돌려받지 못하셨군요. 먼저 어떤 계약인지 확인할게요. 말씀하신 보증금은 살던 집의 임대차 보증금인가요?",List.of(),false);
         }
         var current=corpus.stream().filter(source->score(source,query)>0).toList();
-        String retrievalQuery=current.isEmpty()?history:query;
-        var candidates=current.isEmpty()?corpus:current;
+        long currentBest=current.stream().mapToLong(source->score(source,query)).max().orElse(0);
+        long historyBest=history.isBlank()?0:corpus.stream().mapToLong(source->score(source,history)).max().orElse(0);
+        boolean followUp=currentBest<4&&historyBest>=4;
+        String retrievalQuery=followUp?history:query;
+        var candidates=followUp||current.isEmpty()?corpus:current;
         long best=candidates.stream().mapToLong(source->score(source,retrievalQuery)).max().orElse(0);
         long minimum=best>=4?4:1;
         var ranked=candidates.stream()
