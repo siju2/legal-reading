@@ -48,11 +48,11 @@ class LocalLegalAiTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.sources[0].id").value("wage-payment"));
         verify(ai).explain(anyString(),contains("월급을 못 받았어요."));
     }
-    @Test void chatFindsAnArticleFromTheOfficialBulkCorpus() throws Exception {
+    @Test void chatFindsAnArticleFromTheLegalCorpus() throws Exception {
         mvc.perform(post("/legal-ai/chat").with(user("alice")).with(csrf())
                 .param("question","민법 제1000조를 설명해 주세요."))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.sources[0].id").value("law-284415-100000"))
+            .andExpect(jsonPath("$.sources[0].url").value("https://www.law.go.kr/법령/%EB%AF%BC%EB%B2%95/%EC%A0%9C1000%EC%A1%B0"))
             .andExpect(jsonPath("$.sources[0].title").value(containsString("상속의 순위")));
         verify(ai).explain(anyString(),contains("상속의 순위"));
     }

@@ -9,8 +9,8 @@ import java.time.LocalDate;
 @Service public class NotebookService {
  public static final List<String> KINDS=List.of("계약","송금","통지","상담","기타");
  private final NotebookRepository books;private final TimelineRepository events;private final ChecklistRepository checks;private final LegalService legal;
- private final ConsultationLogRepository logs;
- public NotebookService(NotebookRepository b,TimelineRepository e,ChecklistRepository c,LegalService l,ConsultationLogRepository logs){books=b;events=e;checks=c;legal=l;this.logs=logs;}
+ private final ConsultationLogRepository logs;private final ChatSessionRepository chatSessions;
+ public NotebookService(NotebookRepository b,TimelineRepository e,ChecklistRepository c,LegalService l,ConsultationLogRepository logs,ChatSessionRepository chatSessions){books=b;events=e;checks=c;legal=l;this.logs=logs;this.chatSessions=chatSessions;}
  public Notebook owned(String user,long id){return books.findById(id).filter(b->b.username.equals(user)).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));}
  @Transactional public Notebook create(String user,String title,String category,Long source){
   LegalService.require(!title.isBlank()&&title.length()<=120,"노트 제목은 1~120자로 입력해 주세요.");LegalService.require(LegalService.CATEGORIES.contains(category),"생활 분야를 확인해 주세요.");
@@ -35,5 +35,5 @@ import java.time.LocalDate;
   log.notebookId=id;log.consultedOn=date;log.answer=answer.strip();log.nextActions=nextActions.strip();log.completed=completed;logs.save(log);
  }
  @Transactional public void removeConsultationLog(String user,long id,long logId){owned(user,id);var log=logs.findById(logId).filter(l->l.notebookId.equals(id)).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));logs.delete(log);}
- @Transactional public void delete(String user,long id){var b=owned(user,id);events.deleteByNotebookId(id);checks.deleteByNotebookId(id);logs.deleteByNotebookId(id);books.delete(b);}
+ @Transactional public void delete(String user,long id){var b=owned(user,id);events.deleteByNotebookId(id);checks.deleteByNotebookId(id);logs.deleteByNotebookId(id);chatSessions.deleteByNotebookId(id);books.delete(b);}
 }

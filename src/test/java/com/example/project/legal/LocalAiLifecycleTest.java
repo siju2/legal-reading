@@ -9,24 +9,23 @@ import java.io.IOException;
 class LocalAiLifecycleTest {
     @Test void reusesBoundPortWithoutStartingOrStoppingAnotherProcess() throws Exception {
         try(var existing=new java.net.ServerSocket()) {
-            try {existing.bind(new InetSocketAddress("127.0.0.1",11435));}
-            catch(java.net.BindException running) {org.junit.jupiter.api.Assumptions.abort("A real local AI server is using this port");}
+            existing.bind(new InetSocketAddress("127.0.0.1",0));
             var settings=new IntegrationSettings(new MockEnvironment()
                 .withProperty("legal.ai.enabled","true").withProperty("legal.ai.provider","local")
                 .withProperty("legal.ai.runtime-path","missing-runtime"));
-            var lifecycle=new LocalAiLifecycle(settings);
+            var lifecycle=new LocalAiLifecycle(settings,existing.getLocalPort());
             lifecycle.run(null);
             lifecycle.stop();
             assertThat(existing.isClosed()).isFalse();
         }
     }
     @Test void missingRuntimeFailsBeforeCreatingAProcess() throws Exception {
-        try(var probe=new java.net.ServerSocket()) {probe.bind(new InetSocketAddress("127.0.0.1",11435));}
-        catch(java.net.BindException running) {org.junit.jupiter.api.Assumptions.abort("A real local AI server is using this port");}
+        int unusedPort;
+        try(var probe=new java.net.ServerSocket(0)) {unusedPort=probe.getLocalPort();}
         var settings=new IntegrationSettings(new MockEnvironment()
             .withProperty("legal.ai.enabled","true").withProperty("legal.ai.provider","local")
             .withProperty("legal.ai.runtime-path","missing-runtime"));
-        var lifecycle=new LocalAiLifecycle(settings);
+        var lifecycle=new LocalAiLifecycle(settings,unusedPort);
         assertThatThrownBy(()->lifecycle.run(null)).isInstanceOf(IOException.class).hasMessageContaining("missing");
         lifecycle.stop();
     }

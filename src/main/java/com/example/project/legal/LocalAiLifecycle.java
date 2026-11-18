@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -18,10 +19,17 @@ import org.springframework.stereotype.Component;
 public class LocalAiLifecycle implements ApplicationRunner {
     private static final Logger log=LoggerFactory.getLogger(LocalAiLifecycle.class);
     private final IntegrationSettings settings;
+    private final int port;
     private Process process;
 
+    @Autowired
     public LocalAiLifecycle(IntegrationSettings settings) {
+        this(settings,11435);
+    }
+
+    LocalAiLifecycle(IntegrationSettings settings,int port) {
         this.settings=settings;
+        this.port=port;
     }
 
     @Override
@@ -29,7 +37,7 @@ public class LocalAiLifecycle implements ApplicationRunner {
         if(!settings.localAi()||!settings.aiReady())return;
         // A bound port also covers a model that is still loading.
         try(var socket=new Socket()) {
-            socket.connect(new InetSocketAddress("127.0.0.1",11435),500);
+            socket.connect(new InetSocketAddress("127.0.0.1",port),500);
             log.info("Local AI is already running. Reusing the existing server.");
             return;
         } catch(IOException unavailable) {

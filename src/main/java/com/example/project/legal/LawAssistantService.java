@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class LawAssistantService {
     public record Source(String id,String title,String text,String url,String checkedAt,List<String> keywords) {}
     public record Answer(String text,List<Source> sources,boolean generated) {}
+    private static final String NO_RELEVANT_SOURCES="어떤 일이 있었는지 편하게 말씀해 주세요. 언제, 누구와 어떤 문제가 생겼는지 알려주시면 관련 실제 법령과 판례를 함께 살펴볼게요.";
     private final IntegrationSettings settings;private final AiGateway gateway;private final AiExplanationService quota;
 private final NotebookService notebooks;private final TimelineRepository events;
     private final EvidenceMapService evidence;private final LocalWebSearch webSearch;private final List<Source> corpus;private final LegalBm25Index retrieval;
@@ -59,6 +60,8 @@ private final NotebookService notebooks;private final TimelineRepository events;
             currentBest=Math.max(currentBest,queryScores[i]);historyBest=Math.max(historyBest,historyScores[i]);
         }
         boolean followUp=currentBest<4&&historyBest>=4;
+        boolean caseNumber=java.util.regex.Pattern.compile("\\d{4}[가-힣]\\d{3,}").matcher(question+" "+history).find();
+        if(currentBest==0&&historyBest==0&&!caseNumber&&!requestsWebSearch(question))return new Answer(NO_RELEVANT_SOURCES,List.of(),false);
         String retrievalQuery=followUp?history:query;
         boolean scanAll=followUp||current.isEmpty();long[] retrievalScores=followUp?historyScores:queryScores;long best=0;
         for(int i=0;i<retrievalScores.length;i++)if(scanAll||queryScores[i]>0)best=Math.max(best,retrievalScores[i]);
@@ -84,6 +87,13 @@ private final NotebookService notebooks;private final TimelineRepository events;
         var grouped=new LinkedHashMap<String,List<Source>>();
         ranked.forEach(i->{var source=corpus.get(i);grouped.computeIfAbsent(source.url(),ignored->new ArrayList<>()).add(source);});
         var localSources=grouped.values().stream().limit(4).map(this::mergeExcerpts).toList();
+        var requestedCaseNumbers=java.util.regex.Pattern.compile("\\d{4}[가-힣]\\d{3,}").matcher(retrievalQuery).results().map(java.util.regex.MatchResult::group).distinct().toList();
+        if(requestedCaseNumbers.size()==1) {
+            String requestedCase=requestedCaseNumbers.get(0);
+            localSources=grouped.values().stream()
+                .filter(group->group.stream().anyMatch(source->(source.title()+" "+source.text()).contains(requestedCase)))
+                .limit(1).map(this::mergeExcerpts).toList();
+        }
         String safeWebQuery=webQuery(question);
         var webSources=requestsWebSearch(question)&&!safeWebQuery.isBlank()?webSearch.search(safeWebQuery):List.<Source>of();
         var searchLinks=webSources.isEmpty()?officialSearchLinks(question,safeWebQuery):List.<Source>of();
@@ -93,7 +103,7 @@ private final NotebookService notebooks;private final TimelineRepository events;
         else localSources.stream().limit(Math.max(0,4-sources.size())).forEach(sources::add);
         searchLinks.stream().limit(Math.max(0,4-sources.size())).forEach(sources::add);
         if(!searchLinks.isEmpty()&&localSources.isEmpty())return new Answer("실시간 검색 결과를 가져오지 못했어요. 아래 공식 검색 페이지에서 최신 결과를 확인해 주세요.",List.copyOf(sources),false);
-        if(sources.isEmpty())return new Answer("어떤 일이 있었는지 편하게 말씀해 주세요. 언제, 누구와 어떤 문제가 생겼는지 알려주시면 관련 실제 법령과 판례를 함께 살펴볼게요.",List.of(),false);
+        if(sources.isEmpty())return new Answer(NO_RELEVANT_SOURCES,List.of(),false);
         quota.reserve(user);
         var context=new StringBuilder("공식 출처를 확인해 정리한 자료(원문 전체가 아닌 요약·발췌):\n");
         for(int i=0;i<sources.size();i++) {var s=sources.get(i);context.append("[").append(i+1).append("] ").append(s.title()).append("\n");if(s.id().startsWith("web-search-"))context.append(s.text()).append("\n공식 원문 링크: ").append(s.url()).append("\n");else if(s.id().startsWith("online-search-"))context.append("공식 검색 페이지 링크(검색 결과 내용은 AI가 읽지 않음): ").append(s.url()).append("\n");else context.append("확인일 ").append(s.checkedAt()).append(" / 공식 원문 ").append(s.url()).append("\n").append(retrieval.excerpt(s.text(),retrievalQuery,2600)).append("\n");}

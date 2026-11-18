@@ -29,4 +29,12 @@ public final class NotebookModels {
   @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT",nullable=false) public String label;
   public boolean completed;
  }
+ @Entity(name="LegalChatSession") @Table(name="legal_chat_sessions",indexes=@Index(name="idx_legal_chat_notebook",columnList="notebook_id,updated_at")) public static class ChatSession {
+  @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;
+  @Column(nullable=false) public Long notebookId;
+  @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT",nullable=false) public String title;
+  @Convert(converter=com.example.project.security.EncryptedTextConverter.class) @Column(columnDefinition="LONGTEXT",nullable=false) public String transcript;
+  public LocalDateTime createdAt=LocalDateTime.now();
+  public LocalDateTime updatedAt=LocalDateTime.now();
+ }
 }
