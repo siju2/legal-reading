@@ -19,7 +19,7 @@ public class LocalAiGateway implements ReasoningAiGateway {
     @Override public String explain(String system,String context) { return explain(system,context,true); }
     @Override public String explain(String system,String context,boolean deepAnalysis) {
         try {
-            var token=settings.value("legal.ai.local-token","");
+            var token=settings.localAiToken();
             if(token.isBlank())throw new IllegalStateException("Local API token missing");
             var body=Map.of("messages",List.of(Map.of("role","system","content",system),Map.of("role","user","content",context)),"thinking",deepAnalysis,"max_tokens",deepAnalysis?1024:512);
             var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:11435/chat")).timeout(Duration.ofSeconds(120))
@@ -28,6 +28,7 @@ public class LocalAiGateway implements ReasoningAiGateway {
             try(var stream=response.body()) {
                 byte[] bytes=stream.readNBytes(131073);
                 if(response.statusCode()==429)throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"로컬 AI가 답변 중입니다. 잠시 후 다시 시도해 주세요.");
+                if(response.statusCode()==413)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"대화 내용이 로컬 AI 입력 한도를 넘었습니다. 질문을 줄이거나 새 대화에서 다시 시도해 주세요.");
                 if(response.statusCode()!=200||bytes.length>131072)throw new IllegalStateException("Local model unavailable");
                 String text=json.readTree(bytes).path("answer").asText("");
                 if(text.isBlank())throw new IllegalStateException("Empty local answer");return text;

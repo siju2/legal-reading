@@ -4,6 +4,8 @@ from pathlib import Path
 
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
+LLAMA_CHAT_TEMPLATE="""{{ bos_token }}{% for message in messages %}{{ '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n' + message['content'] | trim + '<|eot_id|>' }}{% endfor %}{% if add_generation_prompt %}{{ '<|start_header_id|>assistant<|end_header_id|>\n\n' }}{% endif %}"""
+
 def atomic_json(path,value):
     path=Path(path); temporary=path.with_name(path.name+'.tmp')
     with temporary.open('w',encoding='utf-8') as file:
@@ -61,6 +63,7 @@ def encode(row,tokenizer):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--base',required=True);p.add_argument('--dataset',required=True)
     p.add_argument('--output',required=True);p.add_argument('--batch-size',type=int,default=4)
+    p.add_argument('--epochs',type=int,default=1);p.add_argument('--learning-rate',type=float,default=5e-6)
     p.add_argument('--stop-after',type=int,default=0,help='Save and exit after this many steps; next run resumes')
     a=p.parse_args()
     import torch
@@ -68,17 +71,22 @@ def main():
     from peft import PeftModel,LoraConfig,get_peft_model
     if not torch.cuda.is_available():raise RuntimeError('CUDA required')
     dataset=Path(a.dataset);output=Path(a.output);output.mkdir(parents=True,exist_ok=True)
-    config={'batch_size':a.batch_size,'lr':5e-6,'rank':4,'alpha':8,'seed':20261117,'save_every_steps':10}
+    data=json.loads(dataset.read_text(encoding='utf-8'))
+    if not data.get('train') or not data.get('evaluation'):raise ValueError('Training and holdout examples are required')
+    if a.epochs<1 or a.batch_size<1 or a.learning_rate<=0:raise ValueError('Invalid training settings')
+    target=len(data['train'])*a.epochs
+    config={'batch_size':a.batch_size,'epochs':a.epochs,'lr':a.learning_rate,'rank':4,'alpha':8,'seed':20261119,'save_every_steps':10,'target':target}
     identity={'dataset_sha256':digest(dataset),'config':config,'base_config_sha256':digest(Path(a.base)/'config.json'),
               'tokenizer_sha256':digest(Path(a.base)/'tokenizer_config.json'),'trainer_sha256':digest(__file__)}
-    data=json.loads(dataset.read_text(encoding='utf-8'))
-    assert len(data['train'])==1000 and len(data['evaluation'])>=40
     torch.manual_seed(config['seed']);random.seed(config['seed'])
     tokenizer=AutoTokenizer.from_pretrained(a.base,local_files_only=True)
+    if not tokenizer.chat_template and 'llama' in str(tokenizer.name_or_path).lower():tokenizer.chat_template=LLAMA_CHAT_TEMPLATE
     training=[encode(r,tokenizer) for r in data['train']];evaluation=[encode(r,tokenizer) for r in data['evaluation']]
     order=sorted(range(len(training)),key=lambda i:len(training[i]['input_ids']))
-    batches=[order[i:i+a.batch_size] for i in range(0,len(order),a.batch_size)]
-    random.Random(config['seed']).shuffle(batches)
+    batches=[]
+    for epoch in range(a.epochs):
+        epoch_batches=[order[i:i+a.batch_size] for i in range(0,len(order),a.batch_size)]
+        random.Random(config['seed']+epoch).shuffle(epoch_batches);batches.extend(epoch_batches)
     saved=read_checkpoint(output,identity) if (output/'latest.json').exists() else None
     model=AutoModelForCausalLM.from_pretrained(a.base,torch_dtype=torch.bfloat16,local_files_only=True,attn_implementation='sdpa').to('cuda')
     if saved:model=PeftModel.from_pretrained(model,saved[0],is_trainable=True,local_files_only=True)
@@ -118,20 +126,20 @@ def main():
         if not torch.isfinite(loss):raise RuntimeError('Non-finite loss; previous checkpoint preserved')
         loss.backward();torch.nn.utils.clip_grad_norm_(model.parameters(),1.0);optimizer.step()
         step=index+1;seen+=len(batches[index])
-        if step%config['save_every_steps']==0 or seen==1000 or (a.stop_after and step>=a.stop_after):
+        if step%config['save_every_steps']==0 or seen==target or (a.stop_after and step>=a.stop_after):
             checkpoint(output,model,optimizer,step,seen,identity)
-            progress={'step':step,'steps':len(batches),'seen':seen,'target':1000,'loss':round(loss.item(),5),
+            progress={'step':step,'steps':len(batches),'seen':seen,'target':target,'loss':round(loss.item(),5),
                 'checkpoint_saved':True,'seconds_this_run':round(time.time()-started),
-                'eta_seconds':round((time.time()-started)/max(1,seen-initial_seen)*(1000-seen))}
+                'eta_seconds':round((time.time()-started)/max(1,seen-initial_seen)*(target-seen))}
             atomic_json(output/'progress.json',progress);print(json.dumps(progress),flush=True)
         if a.stop_after and step>=a.stop_after:break
     latest,state=read_checkpoint(output,identity)
     if state['step']!=step:latest=checkpoint(output,model,optimizer,step,seen,identity)
-    if seen!=1000:
+    if seen!=target:
         atomic_json(output/'result.json',{'completed':False,'seen':seen,'checkpoint':str(latest),'resume_verified':True})
         print('Saved safely; run the same command to resume.',flush=True);return
     after=loss_on_holdout()
-    result={'completed':True,'train_examples':1000,'seen':seen,'evaluation_examples':len(evaluation),
+    result={'completed':True,'train_examples':len(training),'epochs':a.epochs,'seen':seen,'evaluation_examples':len(evaluation),
         'evaluation_loss_before':before,'evaluation_loss_after':after,'checkpoint':str(latest),
         'identity':identity,'private_data_used':False,'generation_gate':'pending','published':False}
     atomic_json(output/'result.json',result);print(json.dumps(result),flush=True)

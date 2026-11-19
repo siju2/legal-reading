@@ -175,6 +175,10 @@ form.addEventListener('submit', async event => {
     const nextScope = data.get('notebookId') + ':' + data.has('consent');
     if (nextScope !== scope) { conversation = []; turns.length = 0; sessionField.value = ''; dirty = false; clearMessages(); }
     scope = nextScope;
+    if (turns.length + 2 > 50) {
+        status.textContent = '이 대화는 25회까지 저장할 수 있습니다. 대화를 저장한 뒤 새 대화를 시작해 주세요.';
+        return;
+    }
     const question = input.value.trim();
     data.set('question', question);
     data.set('context', conversation.slice(-6).map(turn => turn.role + ': ' + turn.text).join('\n').slice(-12000));
@@ -182,7 +186,7 @@ form.addEventListener('submit', async event => {
     send.disabled = reset.disabled = true;
     input.disabled = true;
     const deepAnalysis = data.get('mode') === 'deep';
-    status.textContent = deepAnalysis ? '공식 근거를 대조하며 자세히 검토하고 있습니다.' : '관련 근거를 찾아 핵심을 정리하고 있습니다.';
+    status.textContent = deepAnalysis ? '관련 근거와 조건을 확인해 자세한 답변을 준비하고 있습니다.' : '관련 근거를 찾아 핵심을 정리하고 있습니다.';
     try {
         const response = await fetch(form.action + '/chat', {method: 'POST', body: data});
         if (response.redirected) {
@@ -192,20 +196,25 @@ form.addEventListener('submit', async event => {
         if (!response.ok) {
             status.textContent = {
                 400: '질문과 사건 노트 동의 여부를 확인해 주세요.',
-                429: 'AI가 이미 답변 중입니다. 잠시 후 다시 시도해 주세요.',
+                429: '요청 한도에 도달했거나 AI가 답변 중입니다. 잠시 후 다시 시도해 주세요.',
+                413: '대화가 로컬 AI 입력 한도를 넘었습니다. 새 대화를 시작하거나 질문과 사건 노트 내용을 줄여 주세요.',
                 503: '로컬 AI가 연결되지 않았습니다.'
             }[response.status] || '답변을 받지 못했습니다. 다시 시도해 주세요.';
             return;
         }
         const answer = await response.json();
 
-        const card = message('법률 AI · ' + (deepAnalysis ? '깊은 분석' : '빠른 답변'), answer.text);
+        const card = message('법률 AI · ' + (deepAnalysis ? '자세한 답변' : '빠른 답변'), answer.text);
         const comparing = /비교|차이/.test(question) && answer.sources.length > 1;
         if (comparing) card.classList.add('law-message-comparison');
         if (answer.sources.length) {
             const details = document.createElement('details');
             const summary = document.createElement('summary');
-            summary.textContent = '법령 근거·실시간 검색 결과 ' + answer.sources.length + '건';
+            const liveCount = answer.sources.filter(source => source.id.startsWith('web-search-')).length;
+            const linkCount = answer.sources.filter(source => source.id.startsWith('online-search-')).length;
+            summary.textContent = linkCount === answer.sources.length
+                ? '공식 검색 페이지 ' + linkCount + '개'
+                : '관련 법률 자료 ' + answer.sources.length + '건' + (liveCount ? ' · 실시간 검색 미리보기 포함' : '');
             const list = document.createElement('ol');
             for (const source of answer.sources) {
                 const item = document.createElement('li');
@@ -222,7 +231,7 @@ form.addEventListener('submit', async event => {
                 list.append(item);
             }
             details.className = 'source-details';
-            details.open = comparing;
+            details.open = comparing || !answer.generated;
             list.className = 'source-cards';
             details.append(summary, list);
             card.append(details);

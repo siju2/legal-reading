@@ -1,5 +1,4 @@
 # Copy to data/integrations.properties. Do not commit real secrets.
-legal.ai.enabled=false
-legal.ai.api-key=
-legal.ai.model=gpt-5-mini
+legal.ai.enabled=true
+legal.ai.provider=local
 legal.ai.daily-limit=10

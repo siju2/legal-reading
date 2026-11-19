@@ -20,16 +20,15 @@ Spring 설정 파일이므로 변경 후 앱 재시작이 필요합니다. 기�
 
 ### AI
 
+법률 AI는 다운로드한 로컬 모델을 기본으로 사용합니다. Spring은 `legal.ai.provider=local`로 실행되며, 로컬 모델 서버에 연결되지 않으면 외부 AI로 자동 전환하지 않습니다. 토큰은 `Documents/Codex/local-legal-ai/api-token.txt`에서 읽습니다.
+
 ```properties
 legal.ai.enabled=true
-legal.ai.api-key=발급받은_OpenAI_API_키
-legal.ai.model=gpt-5-mini
+legal.ai.provider=local
 legal.ai.daily-limit=10
 ```
 
-환경변수 대안: `LEGAL_AI_ENABLED`, `OPENAI_API_KEY`, `LEGAL_AI_MODEL`, `LEGAL_AI_DAILY_LIMIT`.
-모델은 설정으로 바꿀 수 있으며 Chat Completions와 `max_completion_tokens`, `reasoning_effort`를 지원해야 합니다.
-API 이용 요금은 별도입니다. 구현은 키 없이도 정상 부팅되며, 실 API 요청은 설정 후 확인합니다.
+외부 OpenAI 사용은 `legal.ai.provider=openai`와 `OPENAI_API_KEY`를 명시적으로 설정한 경우에만 선택됩니다. 활성화 변경 후에는 앱을 재시작하세요.
 
 외부로 보내는 자료는 사용자가 선택한 공개 실제 판례의 제목·사건번호·출처·원문 발췌·편집 해설뿐입니다.
 비공개 판례·가상 자료·회원 개인 메모·사건 노트·업로드 파일은 AI 입력에 포함하지 않습니다.

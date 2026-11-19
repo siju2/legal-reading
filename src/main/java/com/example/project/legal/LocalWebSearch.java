@@ -21,7 +21,7 @@ final class LocalWebSearch {
 
     List<LawAssistantService.Source> search(String query) {
         try {
-            String token=settings.value("legal.ai.local-token","");
+            String token=settings.localAiToken();
             if(token.isBlank())return List.of();
             var body=json.writeValueAsString(Map.of("query",query));
             var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:11435/search")).timeout(Duration.ofSeconds(25))

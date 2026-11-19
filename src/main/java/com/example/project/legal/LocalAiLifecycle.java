@@ -6,6 +6,8 @@ import java.net.*;
 import java.net.http.*;
 import java.time.Duration;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -47,17 +49,23 @@ public class LocalAiLifecycle implements ApplicationRunner {
             Path.of(System.getProperty("user.home"),"Documents","Codex","local-legal-ai").toString()));
         Path script=Path.of(settings.value("legal.ai.server-script","local-ai/serve.py")).toAbsolutePath();
         Path python=runtime.resolve("python-portable/python.exe");
+        Path base=Path.of(settings.value("legal.ai.base-model-path",
+            runtime.resolve("candidates/Qwen3-4B-Instruct-2507").toString()));
         Path adapter=Path.of(settings.value("legal.ai.adapter-path",runtime.resolve("training/adapter").toString()));
         boolean useAdapter=settings.flag("legal.ai.use-adapter");
-        for(Path required:new Path[]{python,script,runtime.resolve("model/config.json"),
-                adapter.resolve("adapter_config.json"),runtime.resolve("api-token.txt")}) {
+        var requiredFiles=new ArrayList<>(List.of(python,script,base.resolve("config.json"),runtime.resolve("api-token.txt")));
+        if(useAdapter)requiredFiles.add(adapter.resolve("adapter_config.json"));
+        for(Path required:requiredFiles) {
             if(!Files.isRegularFile(required))throw new IOException("Local AI runtime file missing: "+required);
         }
         var builder=new ProcessBuilder(python.toString(),script.toString(),
-            "--base",runtime.resolve("model").toString(),
-            "--adapter",adapter.toString(),
+            "--base",base.toString(),
             "--token-file",runtime.resolve("api-token.txt").toString());
-        if(useAdapter)builder.command().add("--use-adapter");
+        if(useAdapter) {
+            builder.command().add("--adapter");
+            builder.command().add(adapter.toString());
+            builder.command().add("--use-adapter");
+        }
         builder.environment().put("HF_HUB_OFFLINE","1");
         builder.environment().put("TRANSFORMERS_OFFLINE","1");
         builder.environment().put("HF_HUB_DISABLE_TELEMETRY","1");

@@ -4,6 +4,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+LLAMA_CHAT_TEMPLATE="""{{ bos_token }}{% for message in messages %}{{ '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n' + message['content'] | trim + '<|eot_id|>' }}{% endfor %}{% if add_generation_prompt %}{{ '<|start_header_id|>assistant<|end_header_id|>\n\n' }}{% endif %}"""
+
 def search_official_web(query):
     from ddgs import DDGS
     rows=DDGS(timeout=15).text(f'{query} site:law.go.kr OR site:scourt.go.kr',region='kr-kr',safesearch='moderate',max_results=8,backend='bing')
@@ -16,23 +18,32 @@ def search_official_web(query):
     return results
 
 class LocalModel:
-    def __init__(self, base, adapter, use_adapter=False):
+    def __init__(self, base, adapter=None, use_adapter=False):
         import torch
-        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM
         if not torch.cuda.is_available():raise RuntimeError('CUDA GPU not available')
         self.torch=torch
+        config=AutoConfig.from_pretrained(base,local_files_only=True)
+        self.model_name=Path(base).name
         self.tokenizer=AutoTokenizer.from_pretrained(base,local_files_only=True)
+        self.chat_template=self.tokenizer.chat_template or (LLAMA_CHAT_TEMPLATE if config.model_type=='llama' else None)
+        if not self.chat_template:raise RuntimeError('Tokenizer chat template is unavailable')
+        self.supports_thinking=config.model_type=='qwen3' and 'enable_thinking' in self.chat_template and '</think>' in self.chat_template
         model=AutoModelForCausalLM.from_pretrained(base,torch_dtype=torch.bfloat16,local_files_only=True,attn_implementation='sdpa').to('cuda')
         self.use_adapter=use_adapter
         if use_adapter:
+            if not adapter:raise ValueError('An adapter path is required when adapter mode is enabled')
             from peft import PeftModel
             model=PeftModel.from_pretrained(model,adapter,local_files_only=True)
         self.model=model.eval()
     def answer(self,messages,max_tokens,thinking=True):
-        inputs=self.tokenizer.apply_chat_template(messages,add_generation_prompt=True,enable_thinking=thinking,tokenize=True,return_dict=True,return_tensors='pt').to('cuda')
+        thinking=thinking and self.supports_thinking
+        template_args={'chat_template':self.chat_template,'add_generation_prompt':True,'tokenize':True,'return_dict':True,'return_tensors':'pt'}
+        if self.supports_thinking:template_args['enable_thinking']=thinking
+        inputs=self.tokenizer.apply_chat_template(messages,**template_args).to('cuda')
         if inputs['input_ids'].shape[1]>8192:raise ValueError('Input too long')
         with self.torch.inference_mode():
-            output=self.model.generate(**inputs,max_new_tokens=max_tokens,do_sample=True,temperature=0.6 if thinking else 0.7,top_p=0.95 if thinking else 0.8,top_k=20,pad_token_id=self.tokenizer.eos_token_id)
+            output=self.model.generate(**inputs,max_new_tokens=max_tokens,do_sample=True,temperature=0.6 if thinking else 0.45,top_p=0.95 if thinking else 0.9,top_k=20 if thinking else 40,repetition_penalty=1.1,pad_token_id=self.tokenizer.eos_token_id)
         generated=output[0][inputs['input_ids'].shape[1]:].tolist()
         if not thinking:return self.tokenizer.decode(generated,skip_special_tokens=True).strip()
         think_end=self.tokenizer.convert_tokens_to_ids('</think>')
@@ -49,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(data)
     def do_GET(self):
         if self.path!='/health':return self.send_json(404,{'error':'Not found'})
-        self.send_json(200,{'ready':True,'trained_adapter':getattr(self.server.runtime,'use_adapter',False),'model':'Qwen3-4B local'})
+        self.send_json(200,{'ready':True,'trained_adapter':getattr(self.server.runtime,'use_adapter',False),'model':self.server.runtime.model_name})
     def do_POST(self):
         try:length=int(self.headers.get('Content-Length','0'))
         except ValueError:return self.send_json(400,{'error':'Invalid body size'})
@@ -85,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
         finally:self.server.busy.release()
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--base',required=True);p.add_argument('--adapter',required=True);p.add_argument('--token-file',required=True);p.add_argument('--use-adapter',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--base',required=True);p.add_argument('--adapter');p.add_argument('--token-file',required=True);p.add_argument('--use-adapter',action='store_true');a=p.parse_args()
     token=Path(a.token_file).read_text(encoding='utf-8-sig').strip()
     if len(token)<32:raise ValueError('A local token with at least 32 characters is required')
     runtime=LocalModel(a.base,a.adapter,a.use_adapter)
