@@ -21,8 +21,8 @@ public class LocalAiGateway implements ReasoningAiGateway {
         try {
             var token=settings.localAiToken();
             if(token.isBlank())throw new IllegalStateException("Local API token missing");
-            var body=Map.of("messages",List.of(Map.of("role","system","content",system),Map.of("role","user","content",context)),"thinking",deepAnalysis,"max_tokens",deepAnalysis?1024:512);
-            var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:11435/chat")).timeout(Duration.ofSeconds(120))
+            var body=Map.of("messages",List.of(Map.of("role","system","content",system),Map.of("role","user","content",context)),"thinking",deepAnalysis,"max_tokens",deepAnalysis?4096:1024);
+            var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:11435/chat")).timeout(Duration.ofSeconds(240))
                 .header("Content-Type","application/json").header("X-Local-AI-Token",token).POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
             var response=client.send(request,HttpResponse.BodyHandlers.ofInputStream());
             try(var stream=response.body()) {

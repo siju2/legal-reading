@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.*;
 class IntegrationSafetyTest {
     @Test void aiIsDisabledWithoutConfiguration() {
         assertThat(new IntegrationSettings(new MockEnvironment()).aiReady()).isFalse();
-        assertThat(new IntegrationSettings(new MockEnvironment().withProperty("legal.ai.enabled","true")).aiReady()).isFalse();
+        assertThat(new IntegrationSettings(new MockEnvironment().withProperty("legal.ai.enabled","true")
+            .withProperty("legal.ai.provider","openai")).aiReady()).isFalse();
     }
 }

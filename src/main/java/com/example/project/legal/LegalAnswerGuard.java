@@ -41,7 +41,8 @@ final class LegalAnswerGuard {
             if (!statute.equals("방법") && !statute.equals("불법") && !sourceEvidence.contains(statute)) return true;
         }
         var claims = LEGAL_CLAIM.matcher(answer);
-        while (claims.find()) if (!sourceEvidence.contains(claims.group().replaceAll("\\s+", ""))) return true;
+        while (claims.find()) if (!sourceEvidence.contains(claims.group().replaceAll("\\s+", ""))
+                && !isQualifiedSuggestion(answer, claims.group(), claims.end())) return true;
         var durations = DURATION.matcher(answer);
         while (durations.find()) if (!sourceEvidence.contains(durations.group().replaceAll("\\s+", ""))) return true;
         var articles = ARTICLE.matcher(answer);
@@ -68,6 +69,16 @@ final class LegalAnswerGuard {
             }
         }
         return false;
+    }
+
+    private static boolean isQualifiedSuggestion(String answer, String claim, int afterClaim) {
+        if (!claim.equals("손해배상")) return false;
+        int end = answer.length();
+        for (char boundary : new char[]{'\n', '.', '!', '?', '。', '！', '？'}) {
+            int next = answer.indexOf(boundary, afterClaim);
+            if (next >= 0) end = Math.min(end, next);
+        }
+        return answer.substring(afterClaim, end).matches(".{0,8}청구.{0,8}검토할 수.*");
     }
 
     private static boolean containsArticle(LawAssistantService.Source source, String article) {

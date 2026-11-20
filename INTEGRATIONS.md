@@ -1,6 +1,6 @@
 # AI · PDF 설정
 
-2026-11-03 추가. 기존 회원·판례·노트 데이터는 유지합니다.
+현재 설정 (2026-11-20). 기존 회원·판례·노트 데이터는 유지합니다.
 
 ## 먼저 실행
 
@@ -20,7 +20,7 @@ Spring 설정 파일이므로 변경 후 앱 재시작이 필요합니다. 기�
 
 ### AI
 
-법률 AI는 다운로드한 로컬 모델을 기본으로 사용합니다. Spring은 `legal.ai.provider=local`로 실행되며, 로컬 모델 서버에 연결되지 않으면 외부 AI로 자동 전환하지 않습니다. 토큰은 `Documents/Codex/local-legal-ai/api-token.txt`에서 읽습니다.
+법률 AI는 Ollama의 로컬 모델을 기본으로 사용합니다. Spring은 `legal.ai.provider=local`로 실행되며, 로컬 모델 서버에 연결되지 않으면 외부 AI로 자동 전환하지 않습니다. 토큰은 `Documents/Codex/local-legal-ai/api-token.txt`에서 읽습니다. Maven 구성은 Spring Boot 4.0.10과 Spring AI 2.0.3을 사용합니다.
 
 ```properties
 legal.ai.enabled=true
@@ -56,7 +56,7 @@ AI 출력은 HTML로 실행하지 않고 텍스트로 표시합니다. 원문을
 
 ## 의존성과 출처
 
-- Spring AI 1.1.8 (Spring Boot 3.5 계열), Apache-2.0: https://github.com/spring-projects/spring-ai
+- Spring AI 2.0.3 (Spring Boot 4.0 계열), Apache-2.0: https://github.com/spring-projects/spring-ai
 - Apache PDFBox 3.0.8, Apache-2.0: https://github.com/apache/pdfbox
 - 나눔고딕, SIL OFL: `src/main/resources/fonts/OFL-NanumGothic.txt`
 - OpenAI 모델/엔드포인트: https://developers.openai.com/api/docs/models/gpt-5-mini

@@ -5,7 +5,8 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from serve import Handler
 class FakeModel:
-    def answer(self,messages,max_tokens):return '로컬 테스트 답변'
+    model_name='test-model'
+    def answer(self,messages,max_tokens,thinking=True):return '로컬 테스트 답변'
 class ApiTests(unittest.TestCase):
     def setUp(self):
         self.server=ThreadingHTTPServer(('127.0.0.1',0),Handler);self.server.token='test-only-token-'+'x'*32;self.server.busy=threading.Lock();self.server.runtime=FakeModel()

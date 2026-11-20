@@ -1,5 +1,5 @@
 """Small LoRA runs with atomic, checked, resumable checkpoints. No active files overwritten."""
-import argparse,hashlib,json,math,os,random,signal,time,uuid
+import argparse,hashlib,json,math,os,random,signal,subprocess,time,uuid
 from pathlib import Path
 
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -52,46 +52,61 @@ def restore_training_state(optimizer,state):
     import torch
     optimizer.load_state_dict(state['optimizer']);random.setstate(state['random']);torch.set_rng_state(state['torch_rng'])
     if state['cuda_rng']:torch.cuda.set_rng_state_all(state['cuda_rng'])
+def wait_for_gpu_temperature(torch):
+    torch.cuda.synchronize()
+    while True:
+        try:temperature=int(subprocess.check_output(['nvidia-smi','--query-gpu=temperature.gpu','--format=csv,noheader'],text=True,stderr=subprocess.DEVNULL).strip().splitlines()[0])
+        except (OSError,subprocess.CalledProcessError,ValueError,IndexError) as exc:raise RuntimeError('Cannot verify GPU temperature; stopping safely') from exc
+        if temperature<62:return
+        time.sleep(2)
 
-def encode(row,tokenizer):
+def encode(row,tokenizer,max_length=768):
     messages=row['messages']
     prompt=tokenizer.apply_chat_template(messages[:-1],tokenize=True,add_generation_prompt=True,enable_thinking=False)
     answer=tokenizer.encode(messages[-1]['content'],add_special_tokens=False)+[tokenizer.eos_token_id]
-    if len(prompt)+len(answer)>768:raise ValueError('Oversize example: '+row['source']['id'])
+    if len(prompt)+len(answer)>max_length:raise ValueError('Oversize example: '+row.get('source',{}).get('id','unknown'))
     return {'input_ids':prompt+answer,'labels':[-100]*len(prompt)+answer}
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--base',required=True);p.add_argument('--dataset',required=True)
     p.add_argument('--output',required=True);p.add_argument('--batch-size',type=int,default=4)
     p.add_argument('--epochs',type=int,default=1);p.add_argument('--learning-rate',type=float,default=5e-6)
+    p.add_argument('--rank',type=int,default=4);p.add_argument('--lora-alpha',type=int,default=8)
+    p.add_argument('--max-seq-length',type=int,default=768);p.add_argument('--load-in-4bit',action='store_true')
     p.add_argument('--stop-after',type=int,default=0,help='Save and exit after this many steps; next run resumes')
     a=p.parse_args()
     import torch
-    from transformers import AutoTokenizer,AutoModelForCausalLM
-    from peft import PeftModel,LoraConfig,get_peft_model
+    from transformers import AutoTokenizer,AutoModelForCausalLM,BitsAndBytesConfig
+    from peft import PeftModel,LoraConfig,get_peft_model,prepare_model_for_kbit_training
     if not torch.cuda.is_available():raise RuntimeError('CUDA required')
     dataset=Path(a.dataset);output=Path(a.output);output.mkdir(parents=True,exist_ok=True)
     data=json.loads(dataset.read_text(encoding='utf-8'))
     if not data.get('train') or not data.get('evaluation'):raise ValueError('Training and holdout examples are required')
-    if a.epochs<1 or a.batch_size<1 or a.learning_rate<=0:raise ValueError('Invalid training settings')
+    if a.epochs<1 or a.batch_size<1 or a.learning_rate<=0 or a.rank<1 or a.lora_alpha<1 or a.max_seq_length<1:raise ValueError('Invalid training settings')
     target=len(data['train'])*a.epochs
-    config={'batch_size':a.batch_size,'epochs':a.epochs,'lr':a.learning_rate,'rank':4,'alpha':8,'seed':20261119,'save_every_steps':10,'target':target}
+    config={'batch_size':a.batch_size,'epochs':a.epochs,'lr':a.learning_rate,'rank':a.rank,'alpha':a.lora_alpha,'load_in_4bit':a.load_in_4bit,'max_seq_length':a.max_seq_length,'seed':20261119,'save_every_steps':10,'target':target}
     identity={'dataset_sha256':digest(dataset),'config':config,'base_config_sha256':digest(Path(a.base)/'config.json'),
               'tokenizer_sha256':digest(Path(a.base)/'tokenizer_config.json'),'trainer_sha256':digest(__file__)}
     torch.manual_seed(config['seed']);random.seed(config['seed'])
     tokenizer=AutoTokenizer.from_pretrained(a.base,local_files_only=True)
     if not tokenizer.chat_template and 'llama' in str(tokenizer.name_or_path).lower():tokenizer.chat_template=LLAMA_CHAT_TEMPLATE
-    training=[encode(r,tokenizer) for r in data['train']];evaluation=[encode(r,tokenizer) for r in data['evaluation']]
+    training=[encode(r,tokenizer,a.max_seq_length) for r in data['train']];evaluation=[encode(r,tokenizer,a.max_seq_length) for r in data['evaluation']]
     order=sorted(range(len(training)),key=lambda i:len(training[i]['input_ids']))
     batches=[]
     for epoch in range(a.epochs):
         epoch_batches=[order[i:i+a.batch_size] for i in range(0,len(order),a.batch_size)]
         random.Random(config['seed']+epoch).shuffle(epoch_batches);batches.extend(epoch_batches)
     saved=read_checkpoint(output,identity) if (output/'latest.json').exists() else None
-    model=AutoModelForCausalLM.from_pretrained(a.base,torch_dtype=torch.bfloat16,local_files_only=True,attn_implementation='sdpa').to('cuda')
+    model_options={'torch_dtype':torch.bfloat16,'local_files_only':True,'attn_implementation':'sdpa'}
+    if a.load_in_4bit:
+        model_options.update(quantization_config=BitsAndBytesConfig(load_in_4bit=True,bnb_4bit_quant_type='nf4',bnb_4bit_use_double_quant=True,bnb_4bit_compute_dtype=torch.bfloat16),device_map={'':0})
+    model=AutoModelForCausalLM.from_pretrained(a.base,**model_options)
+    if a.load_in_4bit:model=prepare_model_for_kbit_training(model,use_gradient_checkpointing=True)
+    else:model=model.to('cuda')
     if saved:model=PeftModel.from_pretrained(model,saved[0],is_trainable=True,local_files_only=True)
-    else:model=get_peft_model(model,LoraConfig(r=4,lora_alpha=8,lora_dropout=.05,target_modules=['q_proj','v_proj'],task_type='CAUSAL_LM'))
-    model.config.use_cache=False;model.gradient_checkpointing_enable();model.enable_input_require_grads()
+    else:model=get_peft_model(model,LoraConfig(r=a.rank,lora_alpha=a.lora_alpha,lora_dropout=.05,target_modules=['q_proj','v_proj'],task_type='CAUSAL_LM'))
+    model.config.use_cache=False
+    if not a.load_in_4bit:model.gradient_checkpointing_enable();model.enable_input_require_grads()
     optimizer=torch.optim.AdamW([v for v in model.parameters() if v.requires_grad],lr=config['lr'])
     def batch(indices,rows=training):
         selected=[rows[i] for i in indices];width=max(len(r['input_ids']) for r in selected)
@@ -105,7 +120,11 @@ def main():
         return values
     def loss_on_holdout():
         model.eval()
-        with torch.no_grad():value=sum(model(**batch([i],evaluation)).loss.item() for i in range(len(evaluation)))/len(evaluation)
+        with torch.no_grad():
+            value=0
+            for i in range(len(evaluation)):
+                wait_for_gpu_temperature(torch);value+=model(**batch([i],evaluation)).loss.item()
+        value/=len(evaluation)
         model.train();return value
     if saved:
         restore_training_state(optimizer,saved[1]);step=saved[1]['step'];seen=saved[1]['seen']
@@ -121,10 +140,12 @@ def main():
     started=time.time();initial_seen=seen;model.train()
     for index in range(step,len(batches)):
         if cancelled or (output/'STOP').exists():break
+        wait_for_gpu_temperature(torch)
         optimizer.zero_grad(set_to_none=True)
         loss=model(**batch(batches[index])).loss
         if not torch.isfinite(loss):raise RuntimeError('Non-finite loss; previous checkpoint preserved')
         loss.backward();torch.nn.utils.clip_grad_norm_(model.parameters(),1.0);optimizer.step()
+        wait_for_gpu_temperature(torch)
         step=index+1;seen+=len(batches[index])
         if step%config['save_every_steps']==0 or seen==target or (a.stop_after and step>=a.stop_after):
             checkpoint(output,model,optimizer,step,seen,identity)

@@ -2,11 +2,14 @@
 
 > 2026-11-03: Spring AI 판례 설명과 PDF 가져오기·내보내기를 추가했습니다. 설정과 제약은 [INTEGRATIONS.md](INTEGRATIONS.md)를 확인하세요. 아래 2026-10-28 기록은 당시 상태입니다.
 
+현재 스택은 Java 17, Spring Boot 4, Spring AI 2입니다. 로그인 뒤 `/legal-ai`에서 로컬 법률 AI와 채팅할 수 있습니다. 인터넷 검색은 화면에서 켜고 끌 수 있으며, 사용자가 선택한 공식 법령·법원·경찰 자료를 참고합니다. 모델과 검색 제약은 [local-ai/README.md](local-ai/README.md)를 확인하세요.
+
 기존 Spring Boot `Project`를 공개 판결을 생활 언어로 이해하는 서비스로 전환했습니다. 프로젝트 이름·기존 회원은 유지하고 새 도메인은 `com.example.project.legal`, 새 테이블은 `legal_*`를 사용합니다.
 
 ## 실행
 
 - Java 17+, Maven, MySQL / 기존 `project` DB 연결을 사용합니다.
+- 컴파일 확인: `./scripts/verify.ps1`. H2 테스트는 요청이 있을 때 `./scripts/verify.ps1 -RunTests`로 실행합니다.
 - `mvn test` : H2 기반 테스트. `mvn clean package` : 실행 JAR 생성.
 - STS에서 기존 `ProjectApplication`을 Spring Boot App으로 실행하거나 `mvn spring-boot:run`.
 - 브라우저: http://localhost:8080/
@@ -26,6 +29,8 @@
 공개 해설은 전문가 검수 완료로 표시하지 않습니다. 가상 자료는 실제 사건번호와 선고일을 저장하지 않습니다. 비공개 초안은 일반 목록·상세·비교·북마크에서 제외됩니다.
 
 ## 초기 자료
+
+주요 문서와 오래된 설계 자료의 구분은 [docs/README.md](docs/README.md)를 확인하세요.
 
 새 자료 테이블이 비어 있을 때만 실제 판결 3건·가상 학습 사례 3건을 넣습니다. 전국 모든 판결이나 전체 소송기록을 수록한 서비스는 아닙니다.
 
@@ -70,7 +75,7 @@
 - `legal_revisions`: 관리자 수정 스냅샷.
 - 기존 `archive_*` 테이블과 업로드 파일은 보존하며 새 서비스는 조회하지 않습니다.
 - 기존 소스·문서는 전환 전 복구 ZIP으로 보관했습니다. 예전 로스트미디어 SRS·일정표는 새 서비스 명세로 사용하지 않습니다.
-- 현재는 등록 자료 검색과 공식 원문 링크를 제공합니다. 개별 AI 법률 상담·승소 예측·전국 판결 자동 수집은 제공하지 않습니다. 공개 판례 AI 설명·PDF 가져오기는 INTEGRATIONS.md를 참고하세요. 공식 API 검색 코드는 아래 추가 기능 항목을 확인하세요.
+- `/legal-ai`는 일반적인 법률 정보와 공식 출처를 함께 설명하는 채팅입니다. 변호사의 자문이나 확정적 사건 판단·승소 예측을 대신하지 않습니다. 공개 판례 AI 설명·PDF 기능은 [INTEGRATIONS.md](INTEGRATIONS.md)를 참고하세요.
 - 국가법령정보 공동활용 API를 나중에 연결할 경우 신청·인증·제공 범위·이용 조건에 맞춰 별도 구현해야 합니다: https://open.law.go.kr/LSO/openApi/guideList.do
 
 GitHub: https://github.com/siju2/legal-reading (비공개 저장소). 이전 로스트미디어 이력은 로컬 lost-media-main 브랜치와 lost-media 원격에 보존합니다.

@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 
 /** In-memory BM25 index with Hangul bigrams for Korean morphology variation. */
 final class LegalBm25Index {
-    record Hit(int document, double score) {}
+    record Hit(int document, double score, int matchedWords) {}
     private static final Pattern WORDS = Pattern.compile("[\\p{IsHangul}\\p{L}\\p{N}]+");
     private final Map<String, PostingList> postings = new HashMap<>();
     private final int[] lengths;
@@ -30,6 +30,7 @@ final class LegalBm25Index {
         var queryTerms = terms(query).keySet();
         if (queryTerms.isEmpty() || lengths.length == 0) return List.of();
         var scores = new HashMap<Integer, Double>();
+        var matchedWords = new HashMap<Integer, Integer>();
         for (String term : queryTerms) {
             PostingList list = postings.get(term);
             if (list == null) continue;
@@ -38,9 +39,10 @@ final class LegalBm25Index {
                 int document = list.documents[i], frequency = list.frequencies[i];
                 double norm = frequency + 1.2 * (1 - 0.75 + 0.75 * lengths[document] / averageLength);
                 scores.merge(document, idf * frequency * 2.2 / norm, Double::sum);
+                if (term.startsWith("w:")) matchedWords.merge(document, 1, Integer::sum);
             }
         }
-        return scores.entrySet().stream().map(e -> new Hit(e.getKey(), e.getValue()))
+        return scores.entrySet().stream().map(e -> new Hit(e.getKey(), e.getValue(), matchedWords.getOrDefault(e.getKey(), 0)))
             .sorted(Comparator.comparingDouble(Hit::score).reversed()).limit(limit).toList();
     }
 

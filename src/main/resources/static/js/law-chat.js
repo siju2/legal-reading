@@ -204,7 +204,7 @@ form.addEventListener('submit', async event => {
         }
         const answer = await response.json();
 
-        const card = message('법률 AI · ' + (deepAnalysis ? '자세한 답변' : '빠른 답변'), answer.text);
+        const card = message('법률 AI · ' + (deepAnalysis ? '생각 모드 · 자세한 답변' : '빠른 답변'), answer.text);
         const comparing = /비교|차이/.test(question) && answer.sources.length > 1;
         if (comparing) card.classList.add('law-message-comparison');
         if (answer.sources.length) {
